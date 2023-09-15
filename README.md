@@ -1,4 +1,4 @@
-# Simple Tool to test MLP inference in your browser
+# Test MLP inference in your browser
 Demo available under https://jakobtroidl.github.io/web-mlp/
 ## Running
 
