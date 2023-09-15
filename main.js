@@ -11,7 +11,7 @@ async function run() {
   try {
     let x = 32768;
     let y = 102;
-    let model_path="https://jakobtroidl.github.io/data/mlp_divisible_by_2_simplified.onnx""
+    let model_path="https://jakobtroidl.github.io/data/mlp_divisible_by_2_simplified.onnx";
 
     const data = Float32Array.from({ length: x * y }, () => Math.random());
     const [modelBytes] = await Promise.all([
