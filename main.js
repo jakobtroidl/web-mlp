@@ -1,3 +1,5 @@
+
+
 import init, { Session, Input } from "@webonnx/wonnx-wasm";
 
 async function fetchBytes(url) {
@@ -26,9 +28,13 @@ async function run() {
     input.insert("x", data);
 
     for (let i = 0; i < 100; i++) {
-      console.time("session.run");
+      
+      const start = performance.now();
       let result = await session.run(input);
-      console.timeEnd("session.run");
+      const end = performance.now();
+
+      document.getElementById("perf").innerHTML = "MLP inference time: " + (end - start) + " ms";
+
     }
 
     session.free();
