@@ -24,17 +24,11 @@ async function run() {
     const input = new Input();
     input.insert("x", data);
 
-    console.time("session.run");
-    let result = await session.run(input);
-    console.timeEnd("session.run");
-
-    console.time("session.run");
-    result = await session.run(input);
-    console.timeEnd("session.run");
-
-    console.time("session.run");
-    result = await session.run(input);
-    console.timeEnd("session.run");
+    for (let i = 0; i < 100; i++) {
+      console.time("session.run");
+      let result = await session.run(input);
+      console.timeEnd("session.run");
+    }
 
     session.free();
     input.free();
