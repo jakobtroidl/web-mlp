@@ -1,5 +1,3 @@
-
-
 import init, { Session, Input } from "@webonnx/wonnx-wasm";
 
 async function fetchBytes(url) {
