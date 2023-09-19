@@ -1,18 +1,22 @@
 // Define the size of the tile
 const TILE_SIZE: u32 = 16;
 
-[[block]] struct Matrix {
-    width: u32;
-    height: u32;
-    data: array<f32>;
+struct Matrix {
+    width: u32,
+    height: u32,
+    data: array<f32>,
 };
 
-[[group(0), binding(0)]] var<storage> A: Matrix;
-[[group(0), binding(1)]] var<storage> B: Matrix;
-[[group(0), binding(2)]] var<storage> C: Matrix;
+@group(0) @binding(0) var<storage> A: Matrix;
+@group(0) @binding(1) var<storage> B: Matrix;
+@group(0) @binding(2) var<storage, read_write> C: Matrix;
 
-[[stage(compute), workgroup_size(TILE_SIZE, TILE_SIZE)]]
-fn main([[builtin(global_invocation_id)]] global_id: vec3<u32>, [[builtin(workgroup_id)]] group_id: vec3<u32>, [[builtin(local_invocation_id)]] local_id: vec3<u32>) {
+@compute @workgroup_size(TILE_SIZE, TILE_SIZE)
+fn main(
+    @builtin(global_invocation_id) global_id: vec3<u32>, 
+    @builtin(workgroup_id) group_id: vec3<u32>, 
+    @builtin(local_invocation_id) local_id: vec3<u32>
+    ) {
     var sum: f32 = 0.0;
 
     // Shared memory for the tile

@@ -12,7 +12,7 @@ async function runMatrixMultiplication() {
   const shaderModule = device.createShaderModule({ code: wgslCode });
 
   // Matrix dimensions
-  const [width, height] = [256, 256]; // Modify these dimensions as needed
+  const [width, height] = [32, 32]; // Modify these dimensions as needed
 
   // Initialize data
   const aData = Float32Array.from(Array(width * height).fill(0), () =>
@@ -35,23 +35,48 @@ async function runMatrixMultiplication() {
     })
   );
 
+  // staging buffer to make data accessible to CPU
+  const stagingBuffer = device.createBuffer({
+    size: cData.byteLength,
+    usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST,
+  });
+
   new Float32Array(aBuffer.getMappedRange()).set(aData);
   new Float32Array(bBuffer.getMappedRange()).set(bData);
+  new Float32Array(cBuffer.getMappedRange()).set(cData);
   aBuffer.unmap();
   bBuffer.unmap();
+  cBuffer.unmap();
 
-  // Create pipeline
-  const pipeline = device.createComputePipeline({
-    layout: "auto",
-    compute: {
-      module: shaderModule,
-      entryPoint: "main",
-    },
+  const bindGroupLayout = device.createBindGroupLayout({
+    entries: [
+      {
+        binding: 0,
+        visibility: GPUShaderStage.COMPUTE,
+        buffer: {
+          type: "read-only-storage",
+        },
+      },
+      {
+        binding: 1,
+        visibility: GPUShaderStage.COMPUTE,
+        buffer: {
+          type: "read-only-storage",
+        },
+      },
+      {
+        binding: 2,
+        visibility: GPUShaderStage.COMPUTE,
+        buffer: {
+          type: "storage",
+        },
+      },
+    ],
   });
 
   // Bind group
   const bindGroup = device.createBindGroup({
-    layout: pipeline.getBindGroupLayout(0),
+    layout: bindGroupLayout,
     entries: [
       { binding: 0, resource: { buffer: aBuffer } },
       { binding: 1, resource: { buffer: bBuffer } },
@@ -59,43 +84,54 @@ async function runMatrixMultiplication() {
     ],
   });
 
+  // Create pipeline
+  const pipeline = device.createComputePipeline({
+    layout: device.createPipelineLayout({
+      bindGroupLayouts: [bindGroupLayout]
+    }),
+    compute: {
+      module: shaderModule,
+      entryPoint: "main"
+    }
+  });
+
   // Command encoder and pass
   const commandEncoder = device.createCommandEncoder();
   const passEncoder = commandEncoder.beginComputePass();
   passEncoder.setPipeline(pipeline);
   passEncoder.setBindGroup(0, bindGroup);
-  passEncoder.dispatch(Math.ceil(width / 16), Math.ceil(height / 16)); // Assuming TILE_SIZE is 16
-  passEncoder.endPass();
+  passEncoder.dispatchWorkgroups(Math.ceil(width / 16), Math.ceil(height / 16)); // Assuming TILE_SIZE is 16
+  passEncoder.end();
 
-  const start = performance.now();
+  // Copy output buffer to staging buffer
+  commandEncoder.copyBufferToBuffer(
+    cBuffer,
+    0, // Source offset
+    stagingBuffer,
+    0, // Destination offset
+    cData.byteLength
+  );
+
+  console.log("Running matrix multiplication...");
 
   // Submit and execute
   device.queue.submit([commandEncoder.finish()]);
 
-  const end = performance.now();
-  console.log("WGSL inference time: " + (end - start) + " ms");
+  console.log("Running matrix multiplication...");
 
-  // Read back the results
-  const readBuffer = device.createBuffer({
-    size: cData.byteLength,
-    usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
-  });
-
-  commandEncoder.copyBufferToBuffer(
-    cBuffer,
-    0,
-    readBuffer,
-    0,
-    cData.byteLength
+  // map staging buffer to read results back to JS
+  await stagingBuffer.mapAsync(
+    GPUMapMode.READ,
+    0, // Offset
+    cData.byteLength // Length
   );
 
-  await readBuffer.mapAsync(GPUMapMode.READ);
-  const outputData = new Float32Array(readBuffer.getMappedRange());
+  console.log("Running matrix multiplication...");
 
-  // Do something with outputData
-  console.log(outputData);
-
-  readBuffer.unmap();
+  const copyArrayBuffer = stagingBuffer.getMappedRange(0, cData.byteLength);
+  const data = copyArrayBuffer.slice();
+  stagingBuffer.unmap();
+  console.log(new Float32Array(data));
 }
 
 runMatrixMultiplication().catch(console.error);
