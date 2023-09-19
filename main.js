@@ -12,7 +12,7 @@ async function runMatrixMultiplication() {
   const shaderModule = device.createShaderModule({ code: wgslCode });
 
   // Matrix dimensions
-  const [width, height] = [32, 32]; // Modify these dimensions as needed
+  const [width, height] = [1024, 1024]; // Modify these dimensions as needed
 
   // Initialize data
   const aData = Float32Array.from(Array(width * height).fill(0), () =>
@@ -26,7 +26,7 @@ async function runMatrixMultiplication() {
   // Create and populate buffers
   const [aBuffer, bBuffer, cBuffer] = [aData, bData, cData].map((arr) =>
     device.createBuffer({
-      size: arr.byteLength,
+      size: arr.byteLength, // 4 bytes for width, 4 bytes for height
       usage:
         GPUBufferUsage.STORAGE |
         GPUBufferUsage.COPY_SRC |
