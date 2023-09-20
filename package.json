@@ -1,6 +1,6 @@
 {
-  "name": "wonnx-wasm-example",
-  "version": "1.0.1",
+  "name": "Web MLP",
+  "version": "1.0.2",
   "description": "",
   "main": "index.js",
   "scripts": {

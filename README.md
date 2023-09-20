@@ -13,6 +13,9 @@ npm run dev
 npm run build
 ```
 
+## Model Visualization
+Visualize the [MLP](https://github.com/jakobtroidl/data/blob/main/mlp_divisible_by_2_simplified.onnx) using [Netron](https://netron.app/).
+
 ## License
 
 Licensed under either of
