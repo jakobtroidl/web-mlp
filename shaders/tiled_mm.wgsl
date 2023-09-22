@@ -42,7 +42,6 @@ fn main(
             sum += tileA[local_y * params.width + k] * tileB[k * params.width + local_x];
             workgroupBarrier();
         }
-        workgroupBarrier();
 
     }
     C[row * params.width + col] = sum;   
