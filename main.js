@@ -1,303 +1,176 @@
-import fullscreenTexturedQuadWGSL from "./shaders/fullscreenTexturedQuad.wgsl";
-import blurWGSL from "./shaders/blur.wgsl";
+import sgemm from "webgpu-blas";
+import tiled_mm from "./shaders/tiled_mm.wgsl";
 
-// Contants from the blur.wgsl shader.
-const tileDim = 128;
-const batch = [4, 4];
+function generate_random_matrix(w, h) {
+  return Float32Array.from(Array(w * h).fill(0), () => Math.random());
+}
 
-
-console.log(fullscreenTexturedQuadWGSL);
-
-const init = async ({ canvas }) => {
+async function gemm_wgpu(aData, bData, w, h) {
+  // Initialize WebGPU
   const adapter = await navigator.gpu.requestAdapter();
   const device = await adapter.requestDevice();
 
-  //if (!pageState.active) return;
-  const context = canvas.getContext("webgpu");
+  console.log("Limits: ", device.limits);
 
-  const devicePixelRatio = window.devicePixelRatio || 1;
-  canvas.width = canvas.clientWidth * devicePixelRatio;
-  canvas.height = canvas.clientHeight * devicePixelRatio;
-  const presentationFormat = navigator.gpu.getPreferredCanvasFormat();
+  // Your WGSL code as a string
+  const wgslCode = tiled_mm; // Replace this with your actual WGSL code
 
-  context.configure({
-    device,
-    format: presentationFormat,
-    alphaMode: "premultiplied",
+  // Create shader module
+  const shaderModule = device.createShaderModule({ code: wgslCode });
+
+  const cData = new Float32Array(w * h).fill(0);
+
+  // Create and populate buffers
+  const [aBuffer, bBuffer, cBuffer] = [aData, bData, cData].map((arr) =>
+    device.createBuffer({
+      size: arr.byteLength,
+      usage:
+        GPUBufferUsage.STORAGE |
+        GPUBufferUsage.COPY_SRC |
+        GPUBufferUsage.COPY_DST,
+      mappedAtCreation: true,
+    })
+  );
+
+  // staging buffer to make data accessible to CPU
+  const stagingBuffer = device.createBuffer({
+    size: cData.byteLength,
+    usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST,
   });
 
-  const blurPipeline = device.createComputePipeline({
-    layout: "auto",
+  new Float32Array(aBuffer.getMappedRange()).set(aData);
+  new Float32Array(bBuffer.getMappedRange()).set(bData);
+  new Float32Array(cBuffer.getMappedRange()).set(cData);
+  aBuffer.unmap();
+  bBuffer.unmap();
+  cBuffer.unmap();
+
+  const bindGroupLayout = device.createBindGroupLayout({
+    entries: [
+      {
+        binding: 0,
+        visibility: GPUShaderStage.COMPUTE,
+        buffer: {
+          type: "read-only-storage",
+        },
+      },
+      {
+        binding: 1,
+        visibility: GPUShaderStage.COMPUTE,
+        buffer: {
+          type: "read-only-storage",
+        },
+      },
+      {
+        binding: 2,
+        visibility: GPUShaderStage.COMPUTE,
+        buffer: {
+          type: "storage",
+        },
+      },
+    ],
+  });
+
+  // Bind group
+  const bindGroup = device.createBindGroup({
+    layout: bindGroupLayout,
+    entries: [
+      { binding: 0, resource: { buffer: aBuffer } },
+      { binding: 1, resource: { buffer: bBuffer } },
+      { binding: 2, resource: { buffer: cBuffer } },
+    ],
+  });
+
+  // Create pipeline
+  const pipeline = device.createComputePipeline({
+    layout: device.createPipelineLayout({
+      bindGroupLayouts: [bindGroupLayout],
+    }),
     compute: {
-      module: device.createShaderModule({
-        code: blurWGSL,
-      }),
+      module: shaderModule,
       entryPoint: "main",
     },
   });
 
-  const fullscreenQuadPipeline = device.createRenderPipeline({
-    layout: "auto",
-    vertex: {
-      module: device.createShaderModule({
-        code: fullscreenTexturedQuadWGSL,
-      }),
-      entryPoint: "vert_main",
-    },
-    fragment: {
-      module: device.createShaderModule({
-        code: fullscreenTexturedQuadWGSL,
-      }),
-      entryPoint: "frag_main",
-      targets: [
-        {
-          format: presentationFormat,
-        },
-      ],
-    },
-    primitive: {
-      topology: "triangle-list",
-    },
-  });
+  let start = performance.now();
 
-  const sampler = device.createSampler({
-    magFilter: "linear",
-    minFilter: "linear",
-  });
+  // Command encoder and pass
+  const commandEncoder = device.createCommandEncoder();
+  const passEncoder = commandEncoder.beginComputePass();
+  passEncoder.setPipeline(pipeline);
+  passEncoder.setBindGroup(0, bindGroup);
+  passEncoder.dispatchWorkgroups(Math.ceil(w / 16), Math.ceil(h / 16)); // Assuming TILE_SIZE is 2
+  passEncoder.end();
 
-  const response = await fetch(
-    new URL("./assets/images/test.png", import.meta.url).toString()
-  );
-  const imageBitmap = await createImageBitmap(await response.blob());
-
-  const [srcWidth, srcHeight] = [imageBitmap.width, imageBitmap.height];
-  const cubeTexture = device.createTexture({
-    size: [srcWidth, srcHeight, 1],
-    format: "rgba8unorm",
-    usage:
-      GPUTextureUsage.TEXTURE_BINDING |
-      GPUTextureUsage.COPY_DST |
-      GPUTextureUsage.RENDER_ATTACHMENT,
-  });
-  device.queue.copyExternalImageToTexture(
-    { source: imageBitmap },
-    { texture: cubeTexture },
-    [imageBitmap.width, imageBitmap.height]
+  // Copy output buffer to staging buffer
+  commandEncoder.copyBufferToBuffer(
+    cBuffer,
+    0, // Source offset
+    stagingBuffer,
+    0, // Destination offset
+    cData.byteLength
   );
 
-  const textures = [0, 1].map(() => {
-    return device.createTexture({
-      size: {
-        width: srcWidth,
-        height: srcHeight,
-      },
-      format: "rgba8unorm",
-      usage:
-        GPUTextureUsage.COPY_DST |
-        GPUTextureUsage.STORAGE_BINDING |
-        GPUTextureUsage.TEXTURE_BINDING,
-    });
-  });
+  // Submit and execute
+  device.queue.submit([commandEncoder.finish()]);
 
-  const buffer0 = (() => {
-    const buffer = device.createBuffer({
-      size: 4,
-      mappedAtCreation: true,
-      usage: GPUBufferUsage.UNIFORM,
-    });
-    new Uint32Array(buffer.getMappedRange())[0] = 0;
-    buffer.unmap();
-    return buffer;
-  })();
+  let end = performance.now();
 
-  const buffer1 = (() => {
-    const buffer = device.createBuffer({
-      size: 4,
-      mappedAtCreation: true,
-      usage: GPUBufferUsage.UNIFORM,
-    });
-    new Uint32Array(buffer.getMappedRange())[0] = 1;
-    buffer.unmap();
-    return buffer;
-  })();
+  console.log("Time: ", end - start, "ms");
 
-  const blurParamsBuffer = device.createBuffer({
-    size: 8,
-    usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.UNIFORM,
-  });
+  // map staging buffer to read results back to JS
+  await stagingBuffer.mapAsync(
+    GPUMapMode.READ,
+    0, // Offset
+    cData.byteLength // Length
+  );
 
-  const computeConstants = device.createBindGroup({
-    layout: blurPipeline.getBindGroupLayout(0),
-    entries: [
-      {
-        binding: 0,
-        resource: sampler,
-      },
-      {
-        binding: 1,
-        resource: {
-          buffer: blurParamsBuffer,
-        },
-      },
-    ],
-  });
+  const copyArrayBuffer = stagingBuffer.getMappedRange(0, cData.byteLength);
+  const data = copyArrayBuffer.slice();
+  stagingBuffer.unmap();
 
-  const computeBindGroup0 = device.createBindGroup({
-    layout: blurPipeline.getBindGroupLayout(1),
-    entries: [
-      {
-        binding: 1,
-        resource: cubeTexture.createView(),
-      },
-      {
-        binding: 2,
-        resource: textures[0].createView(),
-      },
-      {
-        binding: 3,
-        resource: {
-          buffer: buffer0,
-        },
-      },
-    ],
-  });
+  console.log(new Float32Array(data));
 
-  const computeBindGroup1 = device.createBindGroup({
-    layout: blurPipeline.getBindGroupLayout(1),
-    entries: [
-      {
-        binding: 1,
-        resource: textures[0].createView(),
-      },
-      {
-        binding: 2,
-        resource: textures[1].createView(),
-      },
-      {
-        binding: 3,
-        resource: {
-          buffer: buffer1,
-        },
-      },
-    ],
-  });
+  return new Float32Array(data);
+}
 
-  const computeBindGroup2 = device.createBindGroup({
-    layout: blurPipeline.getBindGroupLayout(1),
-    entries: [
-      {
-        binding: 1,
-        resource: textures[1].createView(),
-      },
-      {
-        binding: 2,
-        resource: textures[0].createView(),
-      },
-      {
-        binding: 3,
-        resource: {
-          buffer: buffer0,
-        },
-      },
-    ],
-  });
+function gemm_cpu(A, B, rowsA, colsA, colsB) {
+  if (!A || !B || !rowsA || !colsA || !colsB) return null;
 
-  const showResultBindGroup = device.createBindGroup({
-    layout: fullscreenQuadPipeline.getBindGroupLayout(0),
-    entries: [
-      {
-        binding: 0,
-        resource: sampler,
-      },
-      {
-        binding: 1,
-        resource: textures[1].createView(),
-      },
-    ],
-  });
+  const C = new Float32Array(rowsA * colsB).fill(0.0);
 
-  const settings = {
-    filterSize: 15,
-    iterations: 2,
-  };
-
-  let blockDim;
-  const updateSettings = () => {
-    blockDim = tileDim - (settings.filterSize - 1);
-    device.queue.writeBuffer(
-      blurParamsBuffer,
-      0,
-      new Uint32Array([settings.filterSize, blockDim])
-    );
-  };
-//   gui.add(settings, "filterSize", 1, 33).step(2).onChange(updateSettings);
-//   gui.add(settings, "iterations", 1, 10).step(1);
-
-  updateSettings();
-
-  function frame() {
-    // Sample is no longer the active page.
-    // if (!pageState.active) return;
-
-    const commandEncoder = device.createCommandEncoder();
-
-    const computePass = commandEncoder.beginComputePass();
-    computePass.setPipeline(blurPipeline);
-    computePass.setBindGroup(0, computeConstants);
-
-    computePass.setBindGroup(1, computeBindGroup0);
-    computePass.dispatchWorkgroups(
-      Math.ceil(srcWidth / blockDim),
-      Math.ceil(srcHeight / batch[1])
-    );
-
-    computePass.setBindGroup(1, computeBindGroup1);
-    computePass.dispatchWorkgroups(
-      Math.ceil(srcHeight / blockDim),
-      Math.ceil(srcWidth / batch[1])
-    );
-
-    for (let i = 0; i < settings.iterations - 1; ++i) {
-      computePass.setBindGroup(1, computeBindGroup2);
-      computePass.dispatchWorkgroups(
-        Math.ceil(srcWidth / blockDim),
-        Math.ceil(srcHeight / batch[1])
-      );
-
-      computePass.setBindGroup(1, computeBindGroup1);
-      computePass.dispatchWorkgroups(
-        Math.ceil(srcHeight / blockDim),
-        Math.ceil(srcWidth / batch[1])
-      );
+  for (let i = 0; i < rowsA; i++) {
+    for (let j = 0; j < colsB; j++) {
+      let sum = 0;
+      for (let k = 0; k < colsA; k++) {
+        sum += A[i * colsA + k] * B[k * colsB + j];
+      }
+      C[i * colsB + j] = sum;
     }
-
-    computePass.end();
-
-    const passEncoder = commandEncoder.beginRenderPass({
-      colorAttachments: [
-        {
-          view: context.getCurrentTexture().createView(),
-          clearValue: { r: 0.0, g: 0.0, b: 0.0, a: 1.0 },
-          loadOp: "clear",
-          storeOp: "store",
-        },
-      ],
-    });
-
-    passEncoder.setPipeline(fullscreenQuadPipeline);
-    passEncoder.setBindGroup(0, showResultBindGroup);
-    passEncoder.draw(6);
-    passEncoder.end();
-    device.queue.submit([commandEncoder.finish()]);
-
-    requestAnimationFrame(frame);
   }
-  requestAnimationFrame(frame);
-};
 
+  console.log(C);
+  return C;
+}
 
-const canvas = document.getElementById("wgpu_canvas");
+let width = 4096;
+let height = 4096;
 
-init({canvas}).catch((e) => {
-  console.error(e);
-});
+let A = generate_random_matrix(width, height);
+let B = generate_random_matrix(width, height);
+
+// let A = new Float32Array([
+//   1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16,
+// ]);
+// let B = new Float32Array([
+//   1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16,
+// ]);
+
+let gpu_gemm = await gemm_wgpu(A, B, width, height);
+// let cpu_gemm = gemm_cpu(A, B, width, height, height);
+
+// if (gpu_gemm == cpu_gemm) {
+//   console.log("success, results match");
+// } else {
+//   console.log("fail, results do not match");
+// }
