@@ -1,4 +1,4 @@
-# Fast MLP inference in the web
+# WebGPU accelerated fast MLP inference
 
 ## Running
 
