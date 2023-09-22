@@ -1,4 +1,4 @@
-# Test MLP inference in your browser
+# Fast MLP inference in the web
 Demo available under https://jakobtroidl.github.io/web-mlp/
 ## Running
 
