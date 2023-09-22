@@ -99,12 +99,8 @@ async function gemm_wgpu(aData, bData, w, h) {
   const passEncoder = commandEncoder.beginComputePass();
   passEncoder.setPipeline(pipeline);
   passEncoder.setBindGroup(0, bindGroup);
-  passEncoder.dispatchWorkgroups(Math.ceil(w / 2), Math.ceil(h / 2)); // Assuming TILE_SIZE is 2
+  passEncoder.dispatchWorkgroups(Math.ceil(w / 16), Math.ceil(h / 16)); // Assuming TILE_SIZE is 2
   passEncoder.end();
-
-  let end = performance.now();
-
-  console.log("Time: ", end - start);
 
   // Copy output buffer to staging buffer
   commandEncoder.copyBufferToBuffer(
@@ -117,6 +113,10 @@ async function gemm_wgpu(aData, bData, w, h) {
 
   // Submit and execute
   device.queue.submit([commandEncoder.finish()]);
+
+  let end = performance.now();
+
+  console.log("Time: ", end - start, "ms");
 
   // map staging buffer to read results back to JS
   await stagingBuffer.mapAsync(
@@ -153,24 +153,24 @@ function gemm_cpu(A, B, rowsA, colsA, colsB) {
   return C;
 }
 
-let width = 4;
-let height = 4;
+let width = 4096;
+let height = 4096;
 
-// let A = generate_random_matrix(width, height);
-// let B = generate_random_matrix(width, height);
+let A = generate_random_matrix(width, height);
+let B = generate_random_matrix(width, height);
 
-let A = new Float32Array([
-  1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16,
-]);
-let B = new Float32Array([
-  1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16,
-]);
+// let A = new Float32Array([
+//   1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16,
+// ]);
+// let B = new Float32Array([
+//   1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16,
+// ]);
 
 let gpu_gemm = await gemm_wgpu(A, B, width, height);
-let cpu_gemm = gemm_cpu(A, B, width, height, height);
+// let cpu_gemm = gemm_cpu(A, B, width, height, height);
 
-if (gpu_gemm == cpu_gemm) {
-  console.log("success, results match");
-} else {
-  console.log("fail, results do not match");
-}
+// if (gpu_gemm == cpu_gemm) {
+//   console.log("success, results match");
+// } else {
+//   console.log("fail, results do not match");
+// }

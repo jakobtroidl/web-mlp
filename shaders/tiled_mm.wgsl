@@ -1,7 +1,7 @@
 // Define the size of the tile
-const TILE_SIZE: u32 = 2;
-const width: u32 = 4;
-const height: u32 = 4;
+const TILE_SIZE: u32 = 16;
+const width: u32 = 4096;
+const height: u32 = 4096;
 
 @group(0) @binding(0) var<storage> A: array<f32>;
 @group(0) @binding(1) var<storage> B: array<f32>;
