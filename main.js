@@ -1,4 +1,3 @@
-import sgemm from "webgpu-blas";
 import tiled_mm from "./shaders/tiled_mm.wgsl";
 
 function generate_random_matrix(w, h) {
@@ -166,7 +165,7 @@ let B = generate_random_matrix(width, height);
 //   1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16,
 // ]);
 
-let gpu_gemm = await gemm_wgpu(A, B, width, height);
+let gpu_gemm = gemm_wgpu(A, B, width, height);
 // let cpu_gemm = gemm_cpu(A, B, width, height, height);
 
 // if (gpu_gemm == cpu_gemm) {

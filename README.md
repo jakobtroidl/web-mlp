@@ -1,5 +1,10 @@
 # WebGPU accelerated fast MLP inference
 
+## Install
+```
+npm i web-mlp
+```
+
 ## Running
 
 ```sh
@@ -11,6 +16,14 @@ npm run dev
 
 ```sh
 npm run build
+```
+
+## Pubish to npm
+```
+npm run build
+npm pack
+npm login
+npm publish
 ```
 
 ## License
