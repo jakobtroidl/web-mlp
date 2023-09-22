@@ -1,4 +1,4 @@
-# Test MLP inference in your browser
+# Fast MLP inference in the web
 Demo available under https://jakobtroidl.github.io/web-mlp/
 ## Running
 
@@ -12,9 +12,6 @@ npm run dev
 ```sh
 npm run build
 ```
-
-## Model Visualization
-Visualize the [MLP](https://github.com/jakobtroidl/data/blob/main/mlp_divisible_by_2_simplified.onnx) using [Netron](https://netron.app/).
 
 ## License
 
