@@ -1,7 +1,11 @@
-import tiled_mm from "./shaders/tiled_mm.wgsl";
+import tiled_mm from "./src/shaders/tiled_mm.wgsl";
 
 function generate_random_matrix(w, h, ts) {
   return Float32Array.from(Array(w * h).fill(0), () => Math.random());
+}
+
+function createMLP(config) {
+  // create a sequential model
 }
 
 async function gemm_wgpu(aData, bData, w, h, ts) {
@@ -28,7 +32,6 @@ async function gemm_wgpu(aData, bData, w, h, ts) {
 
   new Uint32Array(paramsBuffer.getMappedRange()).set([w, h]);
   paramsBuffer.unmap();
-
 
   // Create and populate buffers
   const [aBuffer, bBuffer, cBuffer] = [aData, bData, cData].map((arr) =>
@@ -158,7 +161,6 @@ async function gemm_wgpu(aData, bData, w, h, ts) {
 }
 
 function gemm_cpu(A, B, rowsA, colsA, colsB) {
-
   let start = performance.now();
   if (!A || !B || !rowsA || !colsA || !colsB) return null;
 
