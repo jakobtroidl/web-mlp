@@ -155,7 +155,7 @@ async function gemm_wgpu(aData, bData, w, h, ts) {
   const data = copyArrayBuffer.slice();
   stagingBuffer.unmap();
 
-  console.log(new Float32Array(data));
+  console.log("GPU result: ", new Float32Array(data));
 
   return new Float32Array(data);
 }
@@ -179,29 +179,29 @@ function gemm_cpu(A, B, rowsA, colsA, colsB) {
 
   console.log("CPU Time: ", end - start, "ms");
 
-  console.log(C);
+  console.log("CPU result: ", C);
   return C;
 }
 
-let width = 4096; // must be a multiple of tile_size and not bigger than 4096
-let height = 4096; // must be a multiple of tile_size
-let tile_size = 16; // must not be bigger than 16 and divide width and height
+let width = 4; // must be a multiple of tile_size and not bigger than 4096
+let height = 4; // must be a multiple of tile_size
+let tile_size = 2; // must not be bigger than 16 and divide width and height
 
-let A = generate_random_matrix(width, height);
-let B = generate_random_matrix(width, height);
+// let A = generate_random_matrix(width, height);
+// let B = generate_random_matrix(width, height);
 
-// let A = new Float32Array([
-//   1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16,
-// ]);
-// let B = new Float32Array([
-//   1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16,
-// ]);
+let A = new Float32Array([
+  1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16,
+]);
+let B = new Float32Array([
+  1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16,
+]);
 
 let gpu_gemm = gemm_wgpu(A, B, width, height, tile_size);
-// let cpu_gemm = gemm_cpu(A, B, width, height, height);
+let cpu_gemm = gemm_cpu(A, B, width, height, height);
 
-// if (gpu_gemm == cpu_gemm) {
-//   console.log("success, results match");
-// } else {
-//   console.log("fail, results do not match");
-// }
+if (gpu_gemm == cpu_gemm) {
+  console.log("success, results match");
+} else {
+  console.log("fail, results do not match");
+}
