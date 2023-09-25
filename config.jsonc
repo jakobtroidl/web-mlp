@@ -1,16 +1,21 @@
 // config file that defines the network architecture and weights
 {
   "network": {
-    "n_inputs": "4",
-    "n_outputs": "1",
+    "n_inputs": "64",
+    "n_outputs": "4",
     "activation": "ReLU", // "ReLU", "Sigmoid", "Tanh"
     "output_activation": "None",
-    "n_neurons": "64", // "64", "128", "256", "512"
+    "n_neurons": "256", // "64", "128", "256", "512"
     "n_hidden_layers": "2" // "1", "2", "3", "4"
   },
-  "weights": {
-    "layer_1": [0.0], // add weights here as Float32Array
-    "layer_2": [0.0], // add weights here as Float32Array
-    "layer_3": [0.0] // add weights here as Float32Array
-  }
+  "weights": [
+    [0.0], // add weights here as Float32Array
+    [0.0], // add weights here as Float32Array
+    [0.0] // add weights here as Float32Array
+  ],
+  "biases": [
+    [0.0], // add biases here as Float32Array
+    [0.0], // add biases here as Float32Array
+    [0.0] // add biases here as Float32Array
+  ]
 }
