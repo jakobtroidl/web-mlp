@@ -188,28 +188,25 @@ function gemm_cpu(A, B, rowsA, colsA, colsB) {
 }
 
 // all must be divisible by tile_size
-let batch_size = 10;
-let input_size = 6;
-let output_size = 8;
-let tile_size = 2; // must not be bigger than 16 and divide width and height
+let batch_size = 16384;
+let input_size = 32;
+let output_size = 64;
+let tile_size = 16; // must not be bigger than 16
 
-//let width = 1024; // must be a multiple of tile_size and not bigger than 4096
-//let height = 1024; // must be a multiple of tile_size
+let X = generate_random_matrix(batch_size, input_size);
+let W = generate_random_matrix(input_size, output_size);
 
-// let X = generate_random_matrix(batch_size, input_size);
-// let W = generate_random_matrix(input_size, output_size);
+// let X = new Float32Array([
+//   1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12,
+//   1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12,
+//   1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12,
+// ]);
 
-let X = new Float32Array([
-  1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12,
-  1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12,
-  1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12,
-]);
-
-let W = new Float32Array([
-  1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 1, 2, 3, 4, 5, 6, 7, 8,
-  9, 10, 11, 12, 13, 14, 15, 16, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14,
-  15, 16,
-]);
+// let W = new Float32Array([
+//   1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 1, 2, 3, 4, 5, 6, 7, 8,
+//   9, 10, 11, 12, 13, 14, 15, 16, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14,
+//   15, 16,
+// ]);
 
 let gpu_gemm = await linear(
   X,
