@@ -1,11 +1,15 @@
 import tiled_mm from "./src/shaders/tiled_mm.wgsl";
-import { setTileSize, generate_random_matrix } from "./src/utils.js";
+import {
+  setTileSize,
+  generate_random_matrix,
+  Activation,
+} from "./src/utils.js";
 
 function createMLP(config) {
   // create a sequential model
 }
 
-async function gemm_wgpu(aData, bData, w, h, ts) {
+async function linear(x, weights, batchSize, in_features, out_features, ts) {
   // Initialize WebGPU
   const adapter = await navigator.gpu.requestAdapter();
   const device = await adapter.requestDevice();
@@ -18,20 +22,25 @@ async function gemm_wgpu(aData, bData, w, h, ts) {
   // Create shader module
   const shaderModule = device.createShaderModule({ code: wgslCode });
 
-  const cData = new Float32Array(w * h).fill(0);
+  const y = new Float32Array(batchSize * out_features).fill(0);
 
   // Create params buffer and write data to it
   const paramsBuffer = device.createBuffer({
-    size: 2 * 4, // 2 uint32s of 4 bytes each (width, height)
+    size: 4 * 4, // 2 uint32s of 4 bytes each (width, height, activation)
     usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.UNIFORM,
     mappedAtCreation: true,
   });
 
-  new Uint32Array(paramsBuffer.getMappedRange()).set([w, h]);
+  new Uint32Array(paramsBuffer.getMappedRange()).set([
+    batchSize,
+    in_features,
+    out_features,
+    Activation.ReLU,
+  ]);
   paramsBuffer.unmap();
 
   // Create and populate buffers
-  const [aBuffer, bBuffer, cBuffer] = [aData, bData, cData].map((arr) =>
+  const [xBuffer, weightsBuffer, yBuffer] = [x, weights, y].map((arr) =>
     device.createBuffer({
       size: arr.byteLength,
       usage:
@@ -44,16 +53,16 @@ async function gemm_wgpu(aData, bData, w, h, ts) {
 
   // staging buffer to make data accessible to CPU
   const stagingBuffer = device.createBuffer({
-    size: cData.byteLength,
+    size: y.byteLength,
     usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST,
   });
 
-  new Float32Array(aBuffer.getMappedRange()).set(aData);
-  new Float32Array(bBuffer.getMappedRange()).set(bData);
-  new Float32Array(cBuffer.getMappedRange()).set(cData);
-  aBuffer.unmap();
-  bBuffer.unmap();
-  cBuffer.unmap();
+  new Float32Array(xBuffer.getMappedRange()).set(x);
+  new Float32Array(weightsBuffer.getMappedRange()).set(weights);
+  new Float32Array(yBuffer.getMappedRange()).set(y);
+  xBuffer.unmap();
+  weightsBuffer.unmap();
+  yBuffer.unmap();
 
   const bindGroupLayout = device.createBindGroupLayout({
     entries: [
@@ -94,9 +103,9 @@ async function gemm_wgpu(aData, bData, w, h, ts) {
   const bindGroup = device.createBindGroup({
     layout: bindGroupLayout,
     entries: [
-      { binding: 0, resource: { buffer: aBuffer } },
-      { binding: 1, resource: { buffer: bBuffer } },
-      { binding: 2, resource: { buffer: cBuffer } },
+      { binding: 0, resource: { buffer: xBuffer } },
+      { binding: 1, resource: { buffer: weightsBuffer } },
+      { binding: 2, resource: { buffer: yBuffer } },
       { binding: 3, resource: { buffer: paramsBuffer } },
     ],
   });
@@ -117,16 +126,19 @@ async function gemm_wgpu(aData, bData, w, h, ts) {
   const passEncoder = commandEncoder.beginComputePass();
   passEncoder.setPipeline(pipeline);
   passEncoder.setBindGroup(0, bindGroup);
-  passEncoder.dispatchWorkgroups(Math.ceil(w / ts), Math.ceil(h / ts)); // Assuming TILE_SIZE is 2
+  passEncoder.dispatchWorkgroups(
+    Math.ceil(out_features / ts),
+    Math.ceil(batchSize / ts)
+  );
   passEncoder.end();
 
   // Copy output buffer to staging buffer
   commandEncoder.copyBufferToBuffer(
-    cBuffer,
+    yBuffer,
     0, // Source offset
     stagingBuffer,
     0, // Destination offset
-    cData.byteLength
+    y.byteLength
   );
 
   // Submit and execute
@@ -140,10 +152,10 @@ async function gemm_wgpu(aData, bData, w, h, ts) {
   await stagingBuffer.mapAsync(
     GPUMapMode.READ,
     0, // Offset
-    cData.byteLength // Length
+    y.byteLength // Length
   );
 
-  const copyArrayBuffer = stagingBuffer.getMappedRange(0, cData.byteLength);
+  const copyArrayBuffer = stagingBuffer.getMappedRange(0, y.byteLength);
   const data = copyArrayBuffer.slice();
   stagingBuffer.unmap();
 
@@ -175,19 +187,36 @@ function gemm_cpu(A, B, rowsA, colsA, colsB) {
   return C;
 }
 
-let width = 1024; // must be a multiple of tile_size and not bigger than 4096
-let height = 1024; // must be a multiple of tile_size
-let tile_size = 16; // must not be bigger than 16 and divide width and height
+// all must be divisible by tile_size
+let batch_size = 10;
+let input_size = 6;
+let output_size = 8;
+let tile_size = 2; // must not be bigger than 16 and divide width and height
 
-let A = generate_random_matrix(width, height);
-let B = generate_random_matrix(width, height);
+//let width = 1024; // must be a multiple of tile_size and not bigger than 4096
+//let height = 1024; // must be a multiple of tile_size
 
-// let A = new Float32Array([
-//   1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16,
-// ]);
-// let B = new Float32Array([
-//   1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16,
-// ]);
+// let X = generate_random_matrix(batch_size, input_size);
+// let W = generate_random_matrix(input_size, output_size);
 
-let gpu_gemm = await gemm_wgpu(A, B, width, height, tile_size);
-let cpu_gemm = await gemm_cpu(A, B, width, height, height);
+let X = new Float32Array([
+  1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12,
+  1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12,
+  1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12,
+]);
+
+let W = new Float32Array([
+  1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 1, 2, 3, 4, 5, 6, 7, 8,
+  9, 10, 11, 12, 13, 14, 15, 16, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14,
+  15, 16,
+]);
+
+let gpu_gemm = await linear(
+  X,
+  W,
+  batch_size,
+  input_size,
+  output_size,
+  tile_size
+);
+//let cpu_gemm = await gemm_cpu(A, B, width, height, height);

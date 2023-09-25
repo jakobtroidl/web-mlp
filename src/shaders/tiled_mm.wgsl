@@ -1,16 +1,31 @@
 // Define the size of the tile
 struct Params {
-    width: u32,
-    height: u32,
+    batch_size: u32,
+    in_features: u32,
+    out_features: u32,
+    activation: u32, // None: 0, ReLU: 1, Sigmoid: 2, Tanh: 3
 }
 
-@group(0) @binding(0) var<storage> A: array<f32>;
-@group(0) @binding(1) var<storage> B: array<f32>;
-@group(0) @binding(2) var<storage, read_write> C: array<f32>;
+fn activation(x: f32, activation: u32) -> f32 {
+    if activation == 0u {          // No activation
+        return x;
+    } else if activation == 1u {   // ReLU activation
+        return max(0.0, x);
+    } else if activation == 2u {   // Sigmoid activation
+        return 1.0 / (1.0 + exp(-x));
+    } else if activation == 3u {   // Tanh activation
+        return tanh(x);
+    }
+    return x;
+}
+
+@group(0) @binding(0) var<storage> X: array<f32>;
+@group(0) @binding(1) var<storage> W: array<f32>;
+@group(0) @binding(2) var<storage, read_write> Y: array<f32>;
 @group(0) @binding(3) var<uniform> params : Params;
 
-var<workgroup> tileA : array<array<f32, TILE_SIZE>, TILE_SIZE>;
-var<workgroup> tileB : array<array<f32, TILE_SIZE>, TILE_SIZE>;
+var<workgroup> tileX : array<array<f32, TILE_SIZE>, TILE_SIZE>;
+var<workgroup> tileW : array<array<f32, TILE_SIZE>, TILE_SIZE>;
 
 @compute @workgroup_size(TILE_SIZE, TILE_SIZE)
 fn main(
@@ -28,17 +43,18 @@ fn main(
     let col: u32 = group_x * TILE_SIZE + local_x;
 
     //Loop over tiles
-    for (var t = 0u; t < params.width / TILE_SIZE; t = t + 1u) {
+    for (var t = 0u; t < params.in_features / TILE_SIZE; t = t + 1u) {
         // Load data into shared memory
-        tileA[local_y][local_x] = A[row * params.width + (t * TILE_SIZE + local_x)];
-        tileB[local_y][local_x] = B[(t * TILE_SIZE + local_y) * params.width + col];
+        tileX[local_y][local_x] = X[row * params.in_features + (t * TILE_SIZE + local_x)];
+        tileW[local_y][local_x] = W[(t * TILE_SIZE + local_y) * params.out_features + col];
         workgroupBarrier();
-        
+
         // Compute partial results
         for (var k = 0u; k < TILE_SIZE; k = k + 1u) {
-            sum += tileA[local_y][k] * tileB[k][local_x];
+            sum += tileX[local_y][k] * tileW[k][local_x];
         }
         workgroupBarrier();
     }
-    C[row * params.width + col] = sum;   
+
+    Y[row * params.out_features + col] = sum;   
 }

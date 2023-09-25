@@ -9,3 +9,10 @@ export function setTileSize(shader, size) {
 export function generate_random_matrix(w, h) {
   return Float32Array.from(Array(w * h).fill(0), () => Math.random());
 }
+
+export const Activation = {
+  None: 0,
+  ReLU: 1,
+  Sigmoid: 2,
+  Tanh: 3,
+};
