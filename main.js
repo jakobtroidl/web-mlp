@@ -5,22 +5,41 @@ import {
   Activation,
 } from "./src/utils.js";
 
-function createMLP(config) {
-  // create a sequential model
+async function initWebGPU(ts) {
+  // Initialize WebGPU
+  if (navigator.gpu === undefined) {
+    console.error("WebGPU is not supported.");
+    return;
+  }
+  const adapter = await navigator.gpu.requestAdapter();
+
+  if (!adapter) {
+    console.error("WebGPU is not supported. Failed to find a GPU adapter.");
+    return;
+  }
+
+  const device = await adapter.requestDevice();
+  const wgslCode = setTileSize(tiled_mm, ts); // Replace this with your actual WGSL code
+  const shaderModule = device.createShaderModule({ code: wgslCode });
+
+  return { device, shaderModule };
+}
+
+async function createMLP(config) {
+  const { device, shaderModule } = await initWebGPU();
+
+  // initialize data, accessible through buffer IDs
+  // (1) initial input buffer
+  // (2) weight buffers
+  // (3) bias buffers
+  // linear (64, 256)
+  // linear (256, 256)
+  // linear (256, 10)
 }
 
 async function linear(x, weights, batchSize, in_features, out_features, ts) {
-  // Initialize WebGPU
-  const adapter = await navigator.gpu.requestAdapter();
-  const device = await adapter.requestDevice();
-
-  console.log("Limits: ", device.limits);
-
-  // Your WGSL code as a string
-  const wgslCode = setTileSize(tiled_mm, ts); // Replace this with your actual WGSL code
-
-  // Create shader module
-  const shaderModule = device.createShaderModule({ code: wgslCode });
+  // // Initialize WebGPU
+  const { device, shaderModule } = await initWebGPU(ts);
 
   const y = new Float32Array(batchSize * out_features).fill(0);
 
