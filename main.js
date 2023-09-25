@@ -1,8 +1,5 @@
 import tiled_mm from "./src/shaders/tiled_mm.wgsl";
-
-function generate_random_matrix(w, h, ts) {
-  return Float32Array.from(Array(w * h).fill(0), () => Math.random());
-}
+import { setTileSize, generate_random_matrix } from "./src/utils.js";
 
 function createMLP(config) {
   // create a sequential model
@@ -16,7 +13,7 @@ async function gemm_wgpu(aData, bData, w, h, ts) {
   console.log("Limits: ", device.limits);
 
   // Your WGSL code as a string
-  const wgslCode = tiled_mm; // Replace this with your actual WGSL code
+  const wgslCode = setTileSize(tiled_mm, ts); // Replace this with your actual WGSL code
 
   // Create shader module
   const shaderModule = device.createShaderModule({ code: wgslCode });
@@ -112,13 +109,8 @@ async function gemm_wgpu(aData, bData, w, h, ts) {
     compute: {
       module: shaderModule,
       entryPoint: "main",
-      constants: {
-        tile_size: ts,
-      },
     },
   });
-
-  //let start = performance.now();
 
   // Command encoder and pass
   const commandEncoder = device.createCommandEncoder();
@@ -178,30 +170,24 @@ function gemm_cpu(A, B, rowsA, colsA, colsB) {
   let end = performance.now();
 
   console.log("CPU Time: ", end - start, "ms");
-
   console.log("CPU result: ", C);
+
   return C;
 }
 
-let width = 4; // must be a multiple of tile_size and not bigger than 4096
-let height = 4; // must be a multiple of tile_size
-let tile_size = 2; // must not be bigger than 16 and divide width and height
+let width = 1024; // must be a multiple of tile_size and not bigger than 4096
+let height = 1024; // must be a multiple of tile_size
+let tile_size = 16; // must not be bigger than 16 and divide width and height
 
-// let A = generate_random_matrix(width, height);
-// let B = generate_random_matrix(width, height);
+let A = generate_random_matrix(width, height);
+let B = generate_random_matrix(width, height);
 
-let A = new Float32Array([
-  1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16,
-]);
-let B = new Float32Array([
-  1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16,
-]);
+// let A = new Float32Array([
+//   1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16,
+// ]);
+// let B = new Float32Array([
+//   1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16,
+// ]);
 
-let gpu_gemm = gemm_wgpu(A, B, width, height, tile_size);
-let cpu_gemm = gemm_cpu(A, B, width, height, height);
-
-if (gpu_gemm == cpu_gemm) {
-  console.log("success, results match");
-} else {
-  console.log("fail, results do not match");
-}
+let gpu_gemm = await gemm_wgpu(A, B, width, height, tile_size);
+let cpu_gemm = await gemm_cpu(A, B, width, height, height);
