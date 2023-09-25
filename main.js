@@ -88,6 +88,8 @@ async function gemm_wgpu(aData, bData, w, h, ts) {
     ],
   });
 
+  let start = performance.now();
+
   // Bind group
   const bindGroup = device.createBindGroup({
     layout: bindGroupLayout,
@@ -113,7 +115,7 @@ async function gemm_wgpu(aData, bData, w, h, ts) {
     },
   });
 
-  let start = performance.now();
+  //let start = performance.now();
 
   // Command encoder and pass
   const commandEncoder = device.createCommandEncoder();
