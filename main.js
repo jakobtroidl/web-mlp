@@ -58,6 +58,32 @@ function loadComputeParams(config, batch_size) {
   return params;
 }
 
+function createDataBuffers(device, config, batch_size) {
+  let dataBuffers = [];
+  let n_buffers = config.params.n_layers + 1;
+
+  console.log("n_buffers: ", n_buffers);
+  for (let i = 0; i < n_buffers; i++) {
+    let bufferSize = 0.0;
+    if (i == 0) {
+      // input layer size
+      bufferSize = batch_size * config.params.n_inputs;
+    } else if (i == n_buffers - 1) {
+      // output layer size
+      bufferSize = batch_size * config.params.n_outputs;
+    } else {
+      // hidden layer size
+      bufferSize = batch_size * config.params.n_neurons;
+    }
+    // initialize all data buffers with zeros
+    let data = new Float32Array(bufferSize).fill(0);
+    let buffer = createGPUBuffer(device, data);
+
+    dataBuffers.push(buffer);
+  }
+  return dataBuffers;
+}
+
 function getPerLayerBindLayout(device) {
   return device.createBindGroupLayout({
     entries: [
@@ -105,7 +131,7 @@ function createGPUBuffer(device, data) {
 
   if (data instanceof Uint32Array) {
     // map the data to the buffer
-    new Float32Array(buffer.getMappedRange()).set(data);
+    new Uint32Array(buffer.getMappedRange()).set(data);
     buffer.unmap();
   } else {
     new Float32Array(buffer.getMappedRange()).set(data);
@@ -137,6 +163,7 @@ async function createMLP(config, batch_size = 1024, tile_size = 16) {
   let weightBuffers = weights.map((w) => createGPUBuffer(device, w));
   let biasBuffers = biases.map((b) => createGPUBuffer(device, b));
   let computeParamsBuffers = params.map((p) => createGPUBuffer(device, p));
+  let dataBuffers = createDataBuffers(device, config, batch_size);
 
   // create bind group layout
   let perLayerBindLayout = getPerLayerBindLayout(device);
@@ -149,6 +176,7 @@ async function createMLP(config, batch_size = 1024, tile_size = 16) {
   console.log("weightBuffers: ", weightBuffers);
   console.log("biasBuffers: ", biasBuffers);
   console.log("computeParamsBuffers: ", computeParamsBuffers);
+  console.log("dataBuffers: ", dataBuffers);
 
   // initialize data, accessible through buffer IDs
   // (1) initial input buffer
