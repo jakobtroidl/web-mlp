@@ -1,4 +1,5 @@
 import tiled_mm from "./src/shaders/tiled_mm.wgsl";
+import { mlp_config } from "./example-config.js";
 import {
   setTileSize,
   generate_random_matrix,
@@ -144,6 +145,10 @@ async function createMLP(config, batch_size = 1024, tile_size = 16) {
     shaderModule,
     perLayerBindLayout
   );
+
+  console.log("weightBuffers: ", weightBuffers);
+  console.log("biasBuffers: ", biasBuffers);
+  console.log("computeParamsBuffers: ", computeParamsBuffers);
 
   // initialize data, accessible through buffer IDs
   // (1) initial input buffer
@@ -321,12 +326,16 @@ let W = generate_random_matrix(input_size, output_size);
 //   15, 16,
 // ]);
 
-let gpu_gemm = await linear(
-  X,
-  W,
-  batch_size,
-  input_size,
-  output_size,
-  tile_size
-);
+// let gpu_gemm = await linear(
+//   X,
+//   W,
+//   batch_size,
+//   input_size,
+//   output_size,
+//   tile_size
+// );
+
+console.log("config", mlp_config);
+let mlp = await createMLP(mlp_config);
+
 //let cpu_gemm = await gemm_cpu(A, B, width, height, height);
