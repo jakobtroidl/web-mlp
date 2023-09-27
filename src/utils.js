@@ -10,9 +10,47 @@ export function generate_random_matrix(w, h) {
   return Float32Array.from(Array(w * h).fill(0), () => Math.random());
 }
 
+function gemm_cpu(A, B, rowsA, colsA, colsB) {
+  let start = performance.now();
+  if (!A || !B || !rowsA || !colsA || !colsB) return null;
+
+  const C = new Float32Array(rowsA * colsB).fill(0.0);
+
+  for (let i = 0; i < rowsA; i++) {
+    for (let j = 0; j < colsB; j++) {
+      let sum = 0;
+      for (let k = 0; k < colsA; k++) {
+        sum += A[i * colsA + k] * B[k * colsB + j];
+      }
+      C[i * colsB + j] = sum;
+    }
+  }
+  let end = performance.now();
+
+  console.log("CPU Time: ", end - start, "ms");
+  console.log("CPU result: ", C);
+
+  return C;
+}
+
 export const Activation = {
   None: 0,
   ReLU: 1,
   Sigmoid: 2,
   Tanh: 3,
 };
+
+export function getActivation(act_string) {
+  switch (act_string) {
+    case "ReLU":
+      return Activation.ReLU;
+    case "Sigmoid":
+      return Activation.Sigmoid;
+    case "Tanh":
+      return Activation.Tanh;
+    case "None":
+      return Activation.None;
+    default:
+      return Activation.None;
+  }
+}

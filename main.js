@@ -3,6 +3,7 @@ import {
   setTileSize,
   generate_random_matrix,
   Activation,
+  getActivation,
 } from "./src/utils.js";
 
 async function initWebGPU(ts) {
@@ -25,8 +26,124 @@ async function initWebGPU(ts) {
   return { device, shaderModule };
 }
 
-async function createMLP(config) {
+function loadWeights(config) {
+  return config.weights.map((w) => {
+    return new Float32Array(w.data);
+  });
+}
+
+function loadBiases(config) {
+  return config.biases.map((b) => {
+    return new Float32Array(b.data);
+  });
+}
+
+function loadComputeParams(config, batch_size) {
+  let n_layers = config.params.n_layers;
+  let params = [];
+
+  for (let i = 0; i < n_layers; i++) {
+    let layerParam = [
+      batch_size, // batch_size,
+      i == 0 ? config.params.n_inputs : config.params.n_neurons, // in_features,
+      i == n_layers - 1 ? config.params.n_outputs : config.params.n_neurons, // out_features,
+      getActivation(config.params.activation), // activation
+    ];
+
+    layerParam = new Uint32Array(layerParam);
+    params.push(layerParam);
+  }
+
+  return params;
+}
+
+function getPerLayerBindLayout(device) {
+  return (bindGroupLayout = device.createBindGroupLayout({
+    entries: [
+      {
+        binding: 0,
+        visibility: GPUShaderStage.COMPUTE,
+        buffer: {
+          type: "read-only-storage",
+        },
+      },
+      {
+        binding: 1,
+        visibility: GPUShaderStage.COMPUTE,
+        buffer: {
+          type: "read-only-storage",
+        },
+      },
+      {
+        binding: 2,
+        visibility: GPUShaderStage.COMPUTE,
+        buffer: {
+          type: "storage",
+        },
+      },
+      {
+        binding: 3,
+        visibility: GPUShaderStage.COMPUTE,
+        buffer: {
+          type: "uniform",
+        },
+      },
+    ],
+  }));
+}
+
+function createGPUBuffer(device, data) {
+  let buffer = device.createBuffer({
+    size: data.byteLength,
+    usage:
+      GPUBufferUsage.STORAGE |
+      GPUBufferUsage.COPY_SRC |
+      GPUBufferUsage.COPY_DST,
+    mappedAtCreation: true,
+  });
+
+  if (data instanceof Uint32Array) {
+    // map the data to the buffer
+    new Float32Array(buffer.getMappedRange()).set(data);
+    buffer.unmap();
+  } else {
+    new Float32Array(buffer.getMappedRange()).set(data);
+    buffer.unmap();
+  }
+  return buffer;
+}
+
+function getComputePipeline(device, shaderModule, bindGroupLayout) {
+  return device.createComputePipeline({
+    layout: device.createPipelineLayout({
+      bindGroupLayouts: [bindGroupLayout],
+    }),
+    compute: {
+      module: shaderModule,
+      entryPoint: "main",
+    },
+  });
+}
+
+async function createMLP(config, batch_size = 1024, tile_size = 16) {
   const { device, shaderModule } = await initWebGPU();
+
+  let weights = loadWeights(config);
+  let biases = loadBiases(config);
+  let params = loadComputeParams(config, batch_size);
+
+  // create buffers
+  let weightBuffers = weights.map((w) => createGPUBuffer(device, w));
+  let biasBuffers = biases.map((b) => createGPUBuffer(device, b));
+  let computeParamsBuffers = params.map((p) => createGPUBuffer(device, p));
+
+  // create bind group layout
+  let perLayerBindLayout = getPerLayerBindLayout(device);
+  let computePipeline = getComputePipeline(
+    device,
+    shaderModule,
+    perLayerBindLayout
+  );
 
   // initialize data, accessible through buffer IDs
   // (1) initial input buffer
@@ -181,29 +298,6 @@ async function linear(x, weights, batchSize, in_features, out_features, ts) {
   console.log("GPU result: ", new Float32Array(data));
 
   return new Float32Array(data);
-}
-
-function gemm_cpu(A, B, rowsA, colsA, colsB) {
-  let start = performance.now();
-  if (!A || !B || !rowsA || !colsA || !colsB) return null;
-
-  const C = new Float32Array(rowsA * colsB).fill(0.0);
-
-  for (let i = 0; i < rowsA; i++) {
-    for (let j = 0; j < colsB; j++) {
-      let sum = 0;
-      for (let k = 0; k < colsA; k++) {
-        sum += A[i * colsA + k] * B[k * colsB + j];
-      }
-      C[i * colsB + j] = sum;
-    }
-  }
-  let end = performance.now();
-
-  console.log("CPU Time: ", end - start, "ms");
-  console.log("CPU result: ", C);
-
-  return C;
 }
 
 // all must be divisible by tile_size
