@@ -1,5 +1,6 @@
 import tiled_mm from "./src/shaders/tiled_mm.wgsl";
 import { mlp_config } from "./example-config.js";
+import { MLP, Linear } from "./src/mlp.js";
 import {
   setTileSize,
   generate_random_matrix,
@@ -152,6 +153,40 @@ function getComputePipeline(device, shaderModule, bindGroupLayout) {
   });
 }
 
+function createLayers(
+  device,
+  computePipeline,
+  bindGroupLayout,
+  config,
+  batch_size,
+  tile_size,
+  dataBuffers,
+  weightBuffers,
+  biasBuffers,
+  computeParamsBuffers
+) {
+  let layers = [];
+  let n_layers = config.params.n_layers;
+
+  for (let i = 0; i < n_layers; i++) {
+    let layer = new Linear(
+      device,
+      computePipeline,
+      bindGroupLayout,
+      batch_size,
+      config.params.n_outputs,
+      tile_size,
+      dataBuffers[i],
+      weightBuffers[i],
+      biasBuffers[i],
+      computeParamsBuffers[i],
+      dataBuffers[i + 1]
+    );
+    layers.push(layer);
+  }
+  return layers;
+}
+
 async function createMLP(config, batch_size = 1024, tile_size = 16) {
   const { device, shaderModule } = await initWebGPU();
 
@@ -173,18 +208,20 @@ async function createMLP(config, batch_size = 1024, tile_size = 16) {
     perLayerBindLayout
   );
 
-  console.log("weightBuffers: ", weightBuffers);
-  console.log("biasBuffers: ", biasBuffers);
-  console.log("computeParamsBuffers: ", computeParamsBuffers);
-  console.log("dataBuffers: ", dataBuffers);
+  let layers = createLayers(
+    device,
+    computePipeline,
+    perLayerBindLayout,
+    config,
+    batch_size,
+    tile_size,
+    dataBuffers,
+    weightBuffers,
+    biasBuffers,
+    computeParamsBuffers
+  );
 
-  // initialize data, accessible through buffer IDs
-  // (1) initial input buffer
-  // (2) weight buffers
-  // (3) bias buffers
-  // linear (64, 256)
-  // linear (256, 256)
-  // linear (256, 10)
+  return new MLP(layers);
 }
 
 async function linear(x, weights, batchSize, in_features, out_features, ts) {
@@ -362,6 +399,14 @@ let W = generate_random_matrix(input_size, output_size);
 //   output_size,
 //   tile_size
 // );
+
+// let now = performance.now();
+// let counter = 0;
+// for (let i = 0; i < 100000000; i++) {
+//   counter++;
+// }
+// let end = performance.now();
+// console.log("Time: ", end - now, "ms");
 
 console.log("config", mlp_config);
 let mlp = await createMLP(mlp_config);
