@@ -59,7 +59,7 @@ function loadComputeParams(config, batch_size) {
 }
 
 function getPerLayerBindLayout(device) {
-  return (bindGroupLayout = device.createBindGroupLayout({
+  return device.createBindGroupLayout({
     entries: [
       {
         binding: 0,
@@ -90,7 +90,7 @@ function getPerLayerBindLayout(device) {
         },
       },
     ],
-  }));
+  });
 }
 
 function createGPUBuffer(device, data) {

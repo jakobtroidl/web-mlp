@@ -6,7 +6,7 @@ export const mlp_config = {
     activation: "ReLU", // "ReLU", "Sigmoid", "Tanh"
     output_activation: "None",
     n_neurons: "256", // "64", "128", "256", "512"
-    n_layers: "4", // "1", "2", "3", "4"
+    n_layers: "3", // "1", "2", "3", "4"
   },
   weights: [
     [0.0], // add weights here as Float32Array
