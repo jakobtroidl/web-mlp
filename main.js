@@ -88,7 +88,7 @@ function createDataBuffers(device, model, batch_size) {
   return dataBuffers;
 }
 
-function getPerLayerBindLayout(device) {
+function getBindLayout(device) {
   return device.createBindGroupLayout({
     entries: [
       {
@@ -206,12 +206,8 @@ async function createMLP(tf_model, batch_size = 1024, tile_size = 16) {
   let dataBuffers = createDataBuffers(device, tf_model, batch_size);
 
   // create bind group layout
-  let perLayerBindLayout = getPerLayerBindLayout(device);
-  let computePipeline = getComputePipeline(
-    device,
-    shaderModule,
-    perLayerBindLayout
-  );
+  let layout = getBindLayout(device);
+  let computePipeline = getComputePipeline(device, shaderModule, layout);
 
   let layers = [];
 
