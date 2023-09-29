@@ -51,11 +51,9 @@ function loadComputeParams(model, batch_size) {
 }
 
 function createDataBuffers(device, model, batch_size) {
-  console.log("model: ", model);
   let dataBuffers = [];
   let n_buffers = model.length + 1;
 
-  console.log("n_buffers: ", n_buffers);
   for (let i = 0; i < n_buffers; i++) {
     let bufferElements = 0.0;
     if (i == 0) {
@@ -71,7 +69,7 @@ function createDataBuffers(device, model, batch_size) {
     }
     // initialize all data buffers with zeros
     let bufferSize = bufferElements * 4;
-    let data = new Float32Array(bufferSize).fill(0);
+    let data = new Float32Array(bufferSize).fill(0.0);
     let buffer = createGPUBuffer(device, data);
 
     dataBuffers.push(buffer);
@@ -136,11 +134,10 @@ function createGPUBuffer(device, data, isUniform = false) {
   if (data instanceof Uint32Array) {
     // map the data to the buffer
     new Uint32Array(buffer.getMappedRange()).set(data);
-    buffer.unmap();
   } else {
     new Float32Array(buffer.getMappedRange()).set(data);
-    buffer.unmap();
   }
+  buffer.unmap();
   return buffer;
 }
 
@@ -162,9 +159,21 @@ async function createMLP(tf_model, batch_size = 1024, tile_size = 16) {
   let params = loadComputeParams(tf_model, batch_size);
 
   // create buffers
-  let weightBuffers = tf_model.map((layer) =>
-    createGPUBuffer(device, layer.weights)
-  );
+  let weightBuffers = tf_model.map((layer) => {
+    // let size = layer.weight_shape[0] * layer.weight_shape[1];
+    // console.log("size", size);
+    // let tmpData = new Float32Array(size).fill(0.45);
+
+    // console.log("layer.weights", layer.weights);
+    // console.log("tmpData", tmpData);
+    
+    return createGPUBuffer(device, layer.weights);
+    //return createGPUBuffer(device, tmpData);
+  });
+
+
+  console.log("weightBuffers", weightBuffers);
+
   let biasBuffers = tf_model.map((layer) =>
     createGPUBuffer(device, layer.biases)
   );
@@ -359,8 +368,8 @@ async function createMLP(tf_model, batch_size = 1024, tile_size = 16) {
 // }
 
 async function testMLP() {
-  let batch_size = 30000;
-  let tile_size = 16; // must not be bigger than 16
+  let batch_size = 30;
+  let tile_size = 2; // must not be bigger than 16
   const path = "https://jakobtroidl.github.io/data/trainedModel/model.json";
   let tfjs_model = await from_tfjs(path);
   let model = await createMLP(tfjs_model, batch_size, tile_size);
