@@ -17,12 +17,19 @@ export class MLP {
   async inference(data) {
     let outputBytes = this.outputSize * this.batchSize * 4;
     let commandEncoder = this.device.createCommandEncoder();
-    let now = performance.now();
+
     // map data to first data buffer
+    let input = this.layers[0].inputBuffer;
+    this.device.queue.writeBuffer(input, 0, data, 0);
+
+    let now = performance.now();
 
     for (let i = 0; i < this.layers.length; i++) {
-      this.layers[i].inference();
+      await this.layers[i].inference();
     }
+
+    let end = performance.now();
+    console.log("Inference time: ", end - now, "ms");
 
     commandEncoder.copyBufferToBuffer(
       this.layers[this.layers.length - 1].outputBuffer,
@@ -31,9 +38,6 @@ export class MLP {
       0, // Destination offset
       outputBytes
     );
-
-    let end = performance.now();
-    console.log("Inference time: ", end - now, "ms");
 
     // map staging buffer to read results back to JS
     await this.stagingBuffer.mapAsync(
@@ -52,8 +56,10 @@ export class MLP {
 
 export class Linear {
   constructor(
+    index,
     device,
     bindGroup,
+    inputBuffer,
     outputBuffer,
     computePipeline,
     inputSize,
@@ -61,19 +67,19 @@ export class Linear {
     batchSize,
     tile_size
   ) {
+    this.index = index;
     this.device = device;
     this.bindGroup = bindGroup;
+    this.inputBuffer = inputBuffer;
     this.outputBuffer = outputBuffer;
     this.computePipeline = computePipeline;
     this.inputSize = inputSize;
     this.outputSize = outputSize;
     this.batchSize = batchSize;
     this.tile_size = tile_size;
-  }
 
-  inference() {
-    let commandEncoder = this.device.createCommandEncoder();
-    let passEncoder = commandEncoder.beginComputePass();
+    this.commandEncoder = this.device.createCommandEncoder();
+    let passEncoder = this.commandEncoder.beginComputePass();
     passEncoder.setPipeline(this.computePipeline);
     passEncoder.setBindGroup(0, this.bindGroup);
     passEncoder.dispatchWorkgroups(
@@ -81,7 +87,10 @@ export class Linear {
       Math.ceil(this.batchSize / this.tile_size)
     );
     passEncoder.end();
+  }
 
-    this.device.queue.submit([commandEncoder.finish()]);
+  async inference() {
+    this.device.queue.submit([this.commandEncoder.finish()]);
+    await this.device.queue.onSubmittedWorkDone();
   }
 }

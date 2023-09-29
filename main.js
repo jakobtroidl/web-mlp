@@ -57,18 +57,20 @@ function createDataBuffers(device, model, batch_size) {
 
   console.log("n_buffers: ", n_buffers);
   for (let i = 0; i < n_buffers; i++) {
-    let bufferSize = 0.0;
+    let bufferElements = 0.0;
     if (i == 0) {
       // input layer size
-      bufferSize = batch_size * model[i].weight_shape[0];
+      bufferElements = batch_size * model[i].weight_shape[0];
+      //console.log("bufferElements in first layer: ", bufferElements);
     } else if (i == n_buffers - 1) {
       // output layer size
-      bufferSize = batch_size * model[i - 1].weight_shape[1];
+      bufferElements = batch_size * model[i - 1].weight_shape[1];
     } else {
       // hidden layer size
-      bufferSize = batch_size * model[i].weight_shape[0];
+      bufferElements = batch_size * model[i].weight_shape[0];
     }
     // initialize all data buffers with zeros
+    let bufferSize = bufferElements * 4;
     let data = new Float32Array(bufferSize).fill(0);
     let buffer = createGPUBuffer(device, data);
 
@@ -193,8 +195,10 @@ async function createMLP(tf_model, batch_size = 1024, tile_size = 16) {
 
     layers.push(
       new Linear(
+        i,
         device,
         bindGroup,
+        dataBuffers[i],
         dataBuffers[i + 1],
         computePipeline,
         tf_model[i].weight_shape[0],
@@ -355,45 +359,16 @@ async function createMLP(tf_model, batch_size = 1024, tile_size = 16) {
 // }
 
 async function testMLP() {
-  let batch_size = 16384;
-  let tile_size = 2; // must not be bigger than 16
+  let batch_size = 30000;
+  let tile_size = 16; // must not be bigger than 16
   const path = "https://jakobtroidl.github.io/data/trainedModel/model.json";
   let tfjs_model = await from_tfjs(path);
   let model = await createMLP(tfjs_model, batch_size, tile_size);
 
+  console.log(batch_size, model.inputSize, model.outputSize);
   let X = generate_random_matrix(batch_size, model.inputSize);
   let result = await model.inference(X);
   console.log("result", result);
 }
-
-// all must be divisible by tile_size
-let batch_size = 16384;
-// let input_size = 32;
-// let output_size = 64;
-let tile_size = 2; // must not be bigger than 16
-
-// let X = generate_random_matrix(batch_size, input_size);
-// let W = generate_random_matrix(input_size, output_size);
-
-// let X = new Float32Array([
-//   1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12,
-//   1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12,
-//   1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12,
-// ]);
-
-// let W = new Float32Array([
-//   1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 1, 2, 3, 4, 5, 6, 7, 8,
-//   9, 10, 11, 12, 13, 14, 15, 16, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14,
-//   15, 16,
-// ]);
-
-// let gpu_gemm = await linear(
-//   X,
-//   W,
-//   batch_size,
-//   input_size,
-//   output_size,
-//   tile_size
-// );
 
 testMLP();
