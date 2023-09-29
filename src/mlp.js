@@ -1,9 +1,22 @@
 export class MLP {
-  constructor(layers) {
+  constructor(device, layers) {
+    this.device = device;
     this.layers = layers;
+    this.output;
+
+    this.outputSize = layers[layers.length - 1].outputSize;
+    this.batchSize = layers[layers.length - 1].batchSize;
+    this.inputSize = layers[0].inputSize;
+
+    this.stagingBuffer = device.createBuffer({
+      size: this.outputSize * this.batchSize * 4,
+      usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST,
+    });
   }
 
-  inference(data) {
+  async inference(data) {
+    let outputBytes = this.outputSize * this.batchSize * 4;
+    let commandEncoder = this.device.createCommandEncoder();
     let now = performance.now();
     // map data to first data buffer
 
@@ -11,18 +24,29 @@ export class MLP {
       this.layers[i].inference();
     }
 
+    commandEncoder.copyBufferToBuffer(
+      this.layers[this.layers.length - 1].outputBuffer,
+      0, // Source offset
+      this.stagingBuffer,
+      0, // Destination offset
+      outputBytes
+    );
+
     let end = performance.now();
     console.log("Inference time: ", end - now, "ms");
 
-    return "Something has happened";
-  }
+    // map staging buffer to read results back to JS
+    await this.stagingBuffer.mapAsync(
+      GPUMapMode.READ,
+      0, // Offset
+      outputBytes // Length
+    );
 
-  getInputSize() {
-    return this.layers[0].inputSize;
-  }
+    const copyArrayBuffer = this.stagingBuffer.getMappedRange(0, outputBytes);
+    const output = copyArrayBuffer.slice();
+    this.stagingBuffer.unmap();
 
-  getOutputSize() {
-    return this.layers[this.layers.length - 1].outputSize;
+    return new Float32Array(output);
   }
 }
 
@@ -30,6 +54,7 @@ export class Linear {
   constructor(
     device,
     bindGroup,
+    outputBuffer,
     computePipeline,
     inputSize,
     outputSize,
@@ -38,6 +63,7 @@ export class Linear {
   ) {
     this.device = device;
     this.bindGroup = bindGroup;
+    this.outputBuffer = outputBuffer;
     this.computePipeline = computePipeline;
     this.inputSize = inputSize;
     this.outputSize = outputSize;
@@ -46,8 +72,6 @@ export class Linear {
   }
 
   inference() {
-    console.log("Linear inference");
-
     let commandEncoder = this.device.createCommandEncoder();
     let passEncoder = commandEncoder.beginComputePass();
     passEncoder.setPipeline(this.computePipeline);

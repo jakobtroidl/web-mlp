@@ -1,5 +1,4 @@
 import tiled_mm from "./src/shaders/tiled_mm.wgsl";
-import { mlp_config } from "./example-config.js";
 import { MLP, Linear } from "./src/mlp.js";
 import { from_tfjs } from "./src/modelLoader.js";
 
@@ -31,18 +30,6 @@ async function initWebGPU(ts) {
 
   return { device, shaderModule };
 }
-
-// function loadWeights(config) {
-//   return config.weights.map((w) => {
-//     return new Float32Array(w.data);
-//   });
-// }
-
-// function loadBiases(config) {
-//   return config.biases.map((b) => {
-//     return new Float32Array(b.data);
-//   });
-// }
 
 function loadComputeParams(model, batch_size) {
   let n_layers = model.length;
@@ -160,7 +147,6 @@ function getComputePipeline(device, shaderModule, layout) {
     layout: device.createPipelineLayout({
       bindGroupLayouts: [layout],
     }),
-    //layout: "auto",
     compute: {
       module: shaderModule,
       entryPoint: "main",
@@ -192,12 +178,6 @@ async function createMLP(tf_model, batch_size = 1024, tile_size = 16) {
 
   let layers = [];
 
-  console.log("data buffers: ", dataBuffers);
-  console.log("weight buffers: ", weightBuffers);
-  console.log("bias buffers: ", biasBuffers);
-  console.log("compute params buffers: ", computeParamsBuffers);
-
-  console.log("auto layout: ", layout);
   // create layers
   for (let i = 0; i < tf_model.length; i++) {
     let bindGroup = device.createBindGroup({
@@ -215,6 +195,7 @@ async function createMLP(tf_model, batch_size = 1024, tile_size = 16) {
       new Linear(
         device,
         bindGroup,
+        dataBuffers[i + 1],
         computePipeline,
         tf_model[i].weight_shape[0],
         tf_model[i].weight_shape[1],
@@ -224,7 +205,7 @@ async function createMLP(tf_model, batch_size = 1024, tile_size = 16) {
     );
   }
 
-  return new MLP(layers);
+  return new MLP(device, layers);
 }
 
 // async function linear(x, weights, batchSize, in_features, out_features, ts) {
@@ -364,14 +345,26 @@ async function createMLP(tf_model, batch_size = 1024, tile_size = 16) {
 //     y.byteLength // Length
 //   );
 
-//   const copyArrayBuffer = stagingBuffer.getMappedRange(0, y.byteLength);
-//   const data = copyArrayBuffer.slice();
-//   stagingBuffer.unmap();
+// const copyArrayBuffer = stagingBuffer.getMappedRange(0, y.byteLength);
+// const data = copyArrayBuffer.slice();
+// stagingBuffer.unmap();
 
-//   console.log("GPU result: ", new Float32Array(data));
+// console.log("GPU result: ", new Float32Array(data));
 
-//   return new Float32Array(data);
+// return new Float32Array(data);
 // }
+
+async function testMLP() {
+  let batch_size = 16384;
+  let tile_size = 2; // must not be bigger than 16
+  const path = "https://jakobtroidl.github.io/data/trainedModel/model.json";
+  let tfjs_model = await from_tfjs(path);
+  let model = await createMLP(tfjs_model, batch_size, tile_size);
+
+  let X = generate_random_matrix(batch_size, model.inputSize);
+  let result = await model.inference(X);
+  console.log("result", result);
+}
 
 // all must be divisible by tile_size
 let batch_size = 16384;
@@ -403,11 +396,4 @@ let tile_size = 2; // must not be bigger than 16
 //   tile_size
 // );
 
-const path = "https://jakobtroidl.github.io/data/trainedModel/model.json";
-from_tfjs(path).then((model) => {
-  createMLP(model, batch_size, tile_size).then((mlp) => {
-    let X = generate_random_matrix(batch_size, mlp.getInputSize());
-    mlp.inference(X);
-    console.log("mlp", mlp);
-  });
-});
+testMLP();
