@@ -368,8 +368,8 @@ async function createMLP(tf_model, batch_size = 1024, tile_size = 16) {
 // }
 
 async function testMLP() {
-  let batch_size = 30;
-  let tile_size = 2; // must not be bigger than 16
+  let batch_size = 70000;
+  let tile_size = 8; // must not be bigger than 16
   const path = "https://jakobtroidl.github.io/data/trainedModel/model.json";
   let tfjs_model = await from_tfjs(path);
   let model = await createMLP(tfjs_model, batch_size, tile_size);
