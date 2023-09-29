@@ -1,61 +1,84 @@
-import tiled_mm from "./shaders/tiled_mm.wgsl";
+import tiled_mm from "./src/shaders/tiled_mm.wgsl";
+import { MLP, Linear } from "./src/mlp.js";
+import { from_tfjs } from "./src/modelLoader.js";
 
-function generate_random_matrix(w, h, ts) {
-  return Float32Array.from(Array(w * h).fill(0), () => Math.random());
-}
+import {
+  setTileSize,
+  generate_random_matrix,
+  Activation,
+  getActivation,
+} from "./src/utils.js";
 
-async function gemm_wgpu(aData, bData, w, h, ts) {
+async function initWebGPU(ts) {
   // Initialize WebGPU
+  if (navigator.gpu === undefined) {
+    console.error("WebGPU is not supported.");
+    return;
+  }
   const adapter = await navigator.gpu.requestAdapter();
+
+  if (!adapter) {
+    console.error("WebGPU is not supported. Failed to find a GPU adapter.");
+    return;
+  }
+
+  console.log("tile_size", ts);
+
   const device = await adapter.requestDevice();
-
-  console.log("Limits: ", device.limits);
-
-  // Your WGSL code as a string
-  const wgslCode = tiled_mm; // Replace this with your actual WGSL code
-
-  // Create shader module
+  const wgslCode = setTileSize(tiled_mm, ts); // Replace this with your actual WGSL code
   const shaderModule = device.createShaderModule({ code: wgslCode });
 
-  const cData = new Float32Array(w * h).fill(0);
+  return { device, shaderModule };
+}
 
-  // Create params buffer and write data to it
-  const paramsBuffer = device.createBuffer({
-    size: 2 * 4, // 2 uint32s of 4 bytes each (width, height)
-    usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.UNIFORM,
-    mappedAtCreation: true,
-  });
+function loadComputeParams(model, batch_size) {
+  let n_layers = model.length;
+  let params = [];
 
-  new Uint32Array(paramsBuffer.getMappedRange()).set([w, h]);
-  paramsBuffer.unmap();
+  for (let i = 0; i < n_layers; i++) {
+    let layerParam = [
+      batch_size, // batch_size,
+      model[i].weight_shape[0], // in_features,
+      model[i].weight_shape[1], // out_features,
+      getActivation(model[i].activation), // activation
+    ];
 
+    layerParam = new Uint32Array(layerParam);
+    params.push(layerParam);
+  }
 
-  // Create and populate buffers
-  const [aBuffer, bBuffer, cBuffer] = [aData, bData, cData].map((arr) =>
-    device.createBuffer({
-      size: arr.byteLength,
-      usage:
-        GPUBufferUsage.STORAGE |
-        GPUBufferUsage.COPY_SRC |
-        GPUBufferUsage.COPY_DST,
-      mappedAtCreation: true,
-    })
-  );
+  return params;
+}
 
-  // staging buffer to make data accessible to CPU
-  const stagingBuffer = device.createBuffer({
-    size: cData.byteLength,
-    usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST,
-  });
+function createDataBuffers(device, model, batch_size) {
+  let dataBuffers = [];
+  let n_buffers = model.length + 1;
 
-  new Float32Array(aBuffer.getMappedRange()).set(aData);
-  new Float32Array(bBuffer.getMappedRange()).set(bData);
-  new Float32Array(cBuffer.getMappedRange()).set(cData);
-  aBuffer.unmap();
-  bBuffer.unmap();
-  cBuffer.unmap();
+  for (let i = 0; i < n_buffers; i++) {
+    let bufferElements = 0.0;
+    if (i == 0) {
+      // input layer size
+      bufferElements = batch_size * model[i].weight_shape[0];
+      //console.log("bufferElements in first layer: ", bufferElements);
+    } else if (i == n_buffers - 1) {
+      // output layer size
+      bufferElements = batch_size * model[i - 1].weight_shape[1];
+    } else {
+      // hidden layer size
+      bufferElements = batch_size * model[i].weight_shape[0];
+    }
+    // initialize all data buffers with zeros
+    let bufferSize = bufferElements * 4;
+    let data = new Float32Array(bufferSize).fill(0.0);
+    let buffer = createGPUBuffer(device, data);
 
-  const bindGroupLayout = device.createBindGroupLayout({
+    dataBuffers.push(buffer);
+  }
+  return dataBuffers;
+}
+
+function getBindLayout(device) {
+  return device.createBindGroupLayout({
     entries: [
       {
         binding: 0,
@@ -75,11 +98,19 @@ async function gemm_wgpu(aData, bData, w, h, ts) {
         binding: 2,
         visibility: GPUShaderStage.COMPUTE,
         buffer: {
+          type: "read-only-storage",
+        },
+      },
+
+      {
+        binding: 3,
+        visibility: GPUShaderStage.COMPUTE,
+        buffer: {
           type: "storage",
         },
       },
       {
-        binding: 3,
+        binding: 4,
         visibility: GPUShaderStage.COMPUTE,
         buffer: {
           type: "uniform",
@@ -87,119 +118,266 @@ async function gemm_wgpu(aData, bData, w, h, ts) {
       },
     ],
   });
+}
 
-  let start = performance.now();
-
-  // Bind group
-  const bindGroup = device.createBindGroup({
-    layout: bindGroupLayout,
-    entries: [
-      { binding: 0, resource: { buffer: aBuffer } },
-      { binding: 1, resource: { buffer: bBuffer } },
-      { binding: 2, resource: { buffer: cBuffer } },
-      { binding: 3, resource: { buffer: paramsBuffer } },
-    ],
+function createGPUBuffer(device, data, isUniform = false) {
+  let buffer = device.createBuffer({
+    size: data.byteLength,
+    usage: isUniform
+      ? GPUBufferUsage.UNIFORM
+      : GPUBufferUsage.STORAGE |
+        GPUBufferUsage.COPY_SRC |
+        GPUBufferUsage.COPY_DST,
+    mappedAtCreation: true,
   });
 
-  // Create pipeline
-  const pipeline = device.createComputePipeline({
+  if (data instanceof Uint32Array) {
+    // map the data to the buffer
+    new Uint32Array(buffer.getMappedRange()).set(data);
+  } else {
+    new Float32Array(buffer.getMappedRange()).set(data);
+  }
+  buffer.unmap();
+  return buffer;
+}
+
+function getComputePipeline(device, shaderModule, layout) {
+  return device.createComputePipeline({
     layout: device.createPipelineLayout({
-      bindGroupLayouts: [bindGroupLayout],
+      bindGroupLayouts: [layout],
     }),
     compute: {
       module: shaderModule,
       entryPoint: "main",
-      constants: {
-        tile_size: ts,
-      },
     },
   });
-
-  //let start = performance.now();
-
-  // Command encoder and pass
-  const commandEncoder = device.createCommandEncoder();
-  const passEncoder = commandEncoder.beginComputePass();
-  passEncoder.setPipeline(pipeline);
-  passEncoder.setBindGroup(0, bindGroup);
-  passEncoder.dispatchWorkgroups(Math.ceil(w / ts), Math.ceil(h / ts)); // Assuming TILE_SIZE is 2
-  passEncoder.end();
-
-  // Copy output buffer to staging buffer
-  commandEncoder.copyBufferToBuffer(
-    cBuffer,
-    0, // Source offset
-    stagingBuffer,
-    0, // Destination offset
-    cData.byteLength
-  );
-
-  // Submit and execute
-  device.queue.submit([commandEncoder.finish()]);
-
-  let end = performance.now();
-
-  console.log("GPU Time: ", end - start, "ms");
-
-  // map staging buffer to read results back to JS
-  await stagingBuffer.mapAsync(
-    GPUMapMode.READ,
-    0, // Offset
-    cData.byteLength // Length
-  );
-
-  const copyArrayBuffer = stagingBuffer.getMappedRange(0, cData.byteLength);
-  const data = copyArrayBuffer.slice();
-  stagingBuffer.unmap();
-
-  console.log(new Float32Array(data));
-
-  return new Float32Array(data);
 }
 
-function gemm_cpu(A, B, rowsA, colsA, colsB) {
+async function createMLP(tf_model, batch_size = 1024, tile_size = 16) {
+  const { device, shaderModule } = await initWebGPU(tile_size);
 
-  let start = performance.now();
-  if (!A || !B || !rowsA || !colsA || !colsB) return null;
+  let params = loadComputeParams(tf_model, batch_size);
 
-  const C = new Float32Array(rowsA * colsB).fill(0.0);
+  // create buffers
+  let weightBuffers = tf_model.map((layer) => {
+    // let size = layer.weight_shape[0] * layer.weight_shape[1];
+    // console.log("size", size);
+    // let tmpData = new Float32Array(size).fill(0.45);
 
-  for (let i = 0; i < rowsA; i++) {
-    for (let j = 0; j < colsB; j++) {
-      let sum = 0;
-      for (let k = 0; k < colsA; k++) {
-        sum += A[i * colsA + k] * B[k * colsB + j];
-      }
-      C[i * colsB + j] = sum;
-    }
+    // console.log("layer.weights", layer.weights);
+    // console.log("tmpData", tmpData);
+    
+    return createGPUBuffer(device, layer.weights);
+    //return createGPUBuffer(device, tmpData);
+  });
+
+
+  console.log("weightBuffers", weightBuffers);
+
+  let biasBuffers = tf_model.map((layer) =>
+    createGPUBuffer(device, layer.biases)
+  );
+  let isUniform = true;
+  let computeParamsBuffers = params.map((p) =>
+    createGPUBuffer(device, p, isUniform)
+  );
+  let dataBuffers = createDataBuffers(device, tf_model, batch_size);
+
+  // create bind group layout
+  let layout = getBindLayout(device);
+  let computePipeline = getComputePipeline(device, shaderModule, layout);
+
+  let layers = [];
+
+  // create layers
+  for (let i = 0; i < tf_model.length; i++) {
+    let bindGroup = device.createBindGroup({
+      layout: layout,
+      entries: [
+        { binding: 0, resource: { buffer: dataBuffers[i] } },
+        { binding: 1, resource: { buffer: weightBuffers[i] } },
+        { binding: 2, resource: { buffer: biasBuffers[i] } },
+        { binding: 3, resource: { buffer: dataBuffers[i + 1] } },
+        { binding: 4, resource: { buffer: computeParamsBuffers[i] } },
+      ],
+    });
+
+    layers.push(
+      new Linear(
+        i,
+        device,
+        bindGroup,
+        dataBuffers[i],
+        dataBuffers[i + 1],
+        computePipeline,
+        tf_model[i].weight_shape[0],
+        tf_model[i].weight_shape[1],
+        batch_size,
+        tile_size
+      )
+    );
   }
-  let end = performance.now();
 
-  console.log("CPU Time: ", end - start, "ms");
-
-  console.log(C);
-  return C;
+  return new MLP(device, layers);
 }
 
-let width = 4096; // must be a multiple of tile_size and not bigger than 4096
-let height = 4096; // must be a multiple of tile_size
-let tile_size = 16; // must not be bigger than 16 and divide width and height
+// async function linear(x, weights, batchSize, in_features, out_features, ts) {
+//   // // Initialize WebGPU
+//   const { device, shaderModule } = await initWebGPU(ts);
 
-let A = generate_random_matrix(width, height);
-let B = generate_random_matrix(width, height);
+//   const y = new Float32Array(batchSize * out_features).fill(0);
 
-// let A = new Float32Array([
-//   1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16,
-// ]);
-// let B = new Float32Array([
-//   1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16,
-// ]);
+//   // Create params buffer and write data to it
+//   const paramsBuffer = device.createBuffer({
+//     size: 4 * 4, // 2 uint32s of 4 bytes each (width, height, activation)
+//     usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.UNIFORM,
+//     mappedAtCreation: true,
+//   });
 
-let gpu_gemm = gemm_wgpu(A, B, width, height, tile_size);
-// let cpu_gemm = gemm_cpu(A, B, width, height, height);
+//   new Uint32Array(paramsBuffer.getMappedRange()).set([
+//     batchSize,
+//     in_features,
+//     out_features,
+//     Activation.ReLU,
+//   ]);
+//   paramsBuffer.unmap();
 
-// if (gpu_gemm == cpu_gemm) {
-//   console.log("success, results match");
-// } else {
-//   console.log("fail, results do not match");
+//   // Create and populate buffers
+//   const [xBuffer, weightsBuffer, yBuffer] = [x, weights, y].map((arr) =>
+//     device.createBuffer({
+//       size: arr.byteLength,
+//       usage:
+//         GPUBufferUsage.STORAGE |
+//         GPUBufferUsage.COPY_SRC |
+//         GPUBufferUsage.COPY_DST,
+//       mappedAtCreation: true,
+//     })
+//   );
+
+//   // staging buffer to make data accessible to CPU
+//   const stagingBuffer = device.createBuffer({
+//     size: y.byteLength,
+//     usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST,
+//   });
+
+//   new Float32Array(xBuffer.getMappedRange()).set(x);
+//   new Float32Array(weightsBuffer.getMappedRange()).set(weights);
+//   new Float32Array(yBuffer.getMappedRange()).set(y);
+//   xBuffer.unmap();
+//   weightsBuffer.unmap();
+//   yBuffer.unmap();
+
+//   const bindGroupLayout = device.createBindGroupLayout({
+//     entries: [
+//       {
+//         binding: 0,
+//         visibility: GPUShaderStage.COMPUTE,
+//         buffer: {
+//           type: "read-only-storage",
+//         },
+//       },
+//       {
+//         binding: 1,
+//         visibility: GPUShaderStage.COMPUTE,
+//         buffer: {
+//           type: "read-only-storage",
+//         },
+//       },
+//       {
+//         binding: 2,
+//         visibility: GPUShaderStage.COMPUTE,
+//         buffer: {
+//           type: "storage",
+//         },
+//       },
+//       {
+//         binding: 3,
+//         visibility: GPUShaderStage.COMPUTE,
+//         buffer: {
+//           type: "uniform",
+//         },
+//       },
+//     ],
+//   });
+
+//   let start = performance.now();
+
+//   // Bind group
+//   const bindGroup = device.createBindGroup({
+//     layout: bindGroupLayout,
+//     entries: [
+//       { binding: 0, resource: { buffer: xBuffer } },
+//       { binding: 1, resource: { buffer: weightsBuffer } },
+//       { binding: 2, resource: { buffer: yBuffer } },
+//       { binding: 3, resource: { buffer: paramsBuffer } },
+//     ],
+//   });
+
+//   // Create pipeline
+//   const pipeline = device.createComputePipeline({
+//     layout: device.createPipelineLayout({
+//       bindGroupLayouts: [bindGroupLayout],
+//     }),
+//     compute: {
+//       module: shaderModule,
+//       entryPoint: "main",
+//     },
+//   });
+
+//   // Command encoder and pass
+//   const commandEncoder = device.createCommandEncoder();
+//   const passEncoder = commandEncoder.beginComputePass();
+//   passEncoder.setPipeline(pipeline);
+//   passEncoder.setBindGroup(0, bindGroup);
+//   passEncoder.dispatchWorkgroups(
+//     Math.ceil(out_features / ts),
+//     Math.ceil(batchSize / ts)
+//   );
+//   passEncoder.end();
+
+//   // Copy output buffer to staging buffer
+//   commandEncoder.copyBufferToBuffer(
+//     yBuffer,
+//     0, // Source offset
+//     stagingBuffer,
+//     0, // Destination offset
+//     y.byteLength
+//   );
+
+//   // Submit and execute
+//   device.queue.submit([commandEncoder.finish()]);
+
+//   let end = performance.now();
+
+//   console.log("GPU Time: ", end - start, "ms");
+
+//   // map staging buffer to read results back to JS
+//   await stagingBuffer.mapAsync(
+//     GPUMapMode.READ,
+//     0, // Offset
+//     y.byteLength // Length
+//   );
+
+// const copyArrayBuffer = stagingBuffer.getMappedRange(0, y.byteLength);
+// const data = copyArrayBuffer.slice();
+// stagingBuffer.unmap();
+
+// console.log("GPU result: ", new Float32Array(data));
+
+// return new Float32Array(data);
 // }
+
+async function testMLP() {
+  let batch_size = 70000;
+  let tile_size = 8; // must not be bigger than 16
+  const path = "https://jakobtroidl.github.io/data/trainedModel/model.json";
+  let tfjs_model = await from_tfjs(path);
+  let model = await createMLP(tfjs_model, batch_size, tile_size);
+
+  console.log(batch_size, model.inputSize, model.outputSize);
+  let X = generate_random_matrix(batch_size, model.inputSize);
+  let result = await model.inference(X);
+  console.log("result", result);
+}
+
+testMLP();
