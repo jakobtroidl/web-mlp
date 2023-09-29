@@ -21,6 +21,7 @@ export class MLP {
     // map data to first data buffer
     let input = this.layers[0].inputBuffer;
     this.device.queue.writeBuffer(input, 0, data, 0);
+    await this.device.queue.onSubmittedWorkDone();
 
     let now = performance.now();
 
