@@ -10,6 +10,10 @@ export function generate_random_matrix(w, h) {
   return Float32Array.from(Array(w * h).fill(0), () => Math.random());
 }
 
+export function linearizeRowMajor(twoDArray) {
+  return twoDArray.reduce((acc, row) => acc.concat(row), []);
+}
+
 function gemm_cpu(A, B, rowsA, colsA, colsB) {
   let start = performance.now();
   if (!A || !B || !rowsA || !colsA || !colsB) return null;

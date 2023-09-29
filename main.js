@@ -1,6 +1,8 @@
 import tiled_mm from "./src/shaders/tiled_mm.wgsl";
 import { mlp_config } from "./example-config.js";
 import { MLP, Linear } from "./src/mlp.js";
+import { from_tfjs } from "./src/modelLoader.js";
+
 import {
   setTileSize,
   generate_random_matrix,
@@ -400,15 +402,11 @@ let W = generate_random_matrix(input_size, output_size);
 //   tile_size
 // );
 
-// let now = performance.now();
-// let counter = 0;
-// for (let i = 0; i < 100000000; i++) {
-//   counter++;
-// }
-// let end = performance.now();
-// console.log("Time: ", end - now, "ms");
+const path = "https://jakobtroidl.github.io/data/trainedModel/model.json";
+from_tfjs(path).then((res) => {
+  console.log(res);
+});
 
-console.log("config", mlp_config);
-let mlp = await createMLP(mlp_config);
-
-//let cpu_gemm = await gemm_cpu(A, B, width, height, height);
+// console.log("config", mlp_config);
+// let mlp = await createMLP(mlp_config);
+//mlp.inference(X);
