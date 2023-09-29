@@ -3,15 +3,27 @@ export class MLP {
     this.layers = layers;
   }
 
-  // inference(data) {
-  //   // map data to first data buffer
+  inference(data) {
+    let now = performance.now();
+    // map data to first data buffer
 
-  //   for (let i = 0; i < this.layers.length; i++) {
-  //     this.layers[i].inference();
-  //   }
+    for (let i = 0; i < this.layers.length; i++) {
+      this.layers[i].inference();
+    }
 
-  //   return "Something has happened";
-  // }
+    let end = performance.now();
+    console.log("Inference time: ", end - now, "ms");
+
+    return "Something has happened";
+  }
+
+  getInputSize() {
+    return this.layers[0].inputSize;
+  }
+
+  getOutputSize() {
+    return this.layers[this.layers.length - 1].outputSize;
+  }
 }
 
 export class Linear {

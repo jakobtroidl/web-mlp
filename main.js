@@ -23,6 +23,8 @@ async function initWebGPU(ts) {
     return;
   }
 
+  console.log("tile_size", ts);
+
   const device = await adapter.requestDevice();
   const wgslCode = setTileSize(tiled_mm, ts); // Replace this with your actual WGSL code
   const shaderModule = device.createShaderModule({ code: wgslCode });
@@ -109,11 +111,19 @@ function getBindLayout(device) {
         binding: 2,
         visibility: GPUShaderStage.COMPUTE,
         buffer: {
+          type: "read-only-storage",
+        },
+      },
+
+      {
+        binding: 3,
+        visibility: GPUShaderStage.COMPUTE,
+        buffer: {
           type: "storage",
         },
       },
       {
-        binding: 3,
+        binding: 4,
         visibility: GPUShaderStage.COMPUTE,
         buffer: {
           type: "uniform",
@@ -123,13 +133,14 @@ function getBindLayout(device) {
   });
 }
 
-function createGPUBuffer(device, data) {
+function createGPUBuffer(device, data, isUniform = false) {
   let buffer = device.createBuffer({
     size: data.byteLength,
-    usage:
-      GPUBufferUsage.STORAGE |
-      GPUBufferUsage.COPY_SRC |
-      GPUBufferUsage.COPY_DST,
+    usage: isUniform
+      ? GPUBufferUsage.UNIFORM
+      : GPUBufferUsage.STORAGE |
+        GPUBufferUsage.COPY_SRC |
+        GPUBufferUsage.COPY_DST,
     mappedAtCreation: true,
   });
 
@@ -144,11 +155,12 @@ function createGPUBuffer(device, data) {
   return buffer;
 }
 
-function getComputePipeline(device, shaderModule, bindGroupLayout) {
+function getComputePipeline(device, shaderModule, layout) {
   return device.createComputePipeline({
     layout: device.createPipelineLayout({
-      bindGroupLayouts: [bindGroupLayout],
+      bindGroupLayouts: [layout],
     }),
+    //layout: "auto",
     compute: {
       module: shaderModule,
       entryPoint: "main",
@@ -156,42 +168,8 @@ function getComputePipeline(device, shaderModule, bindGroupLayout) {
   });
 }
 
-// function createLayers(
-//   device,
-//   computePipeline,
-//   bindGroupLayout,
-//   config,
-//   batch_size,
-//   tile_size,
-//   dataBuffers,
-//   weightBuffers,
-//   biasBuffers,
-//   computeParamsBuffers
-// ) {
-//   let layers = [];
-//   let n_layers = config.params.n_layers;
-
-//   for (let i = 0; i < n_layers; i++) {
-//     let layer = new Linear(
-//       device,
-//       computePipeline,
-//       bindGroupLayout,
-//       batch_size,
-//       config.params.n_outputs,
-//       tile_size,
-//       dataBuffers[i],
-//       weightBuffers[i],
-//       biasBuffers[i],
-//       computeParamsBuffers[i],
-//       dataBuffers[i + 1]
-//     );
-//     layers.push(layer);
-//   }
-//   return layers;
-// }
-
 async function createMLP(tf_model, batch_size = 1024, tile_size = 16) {
-  const { device, shaderModule } = await initWebGPU();
+  const { device, shaderModule } = await initWebGPU(tile_size);
 
   let params = loadComputeParams(tf_model, batch_size);
 
@@ -202,7 +180,10 @@ async function createMLP(tf_model, batch_size = 1024, tile_size = 16) {
   let biasBuffers = tf_model.map((layer) =>
     createGPUBuffer(device, layer.biases)
   );
-  let computeParamsBuffers = params.map((p) => createGPUBuffer(device, p));
+  let isUniform = true;
+  let computeParamsBuffers = params.map((p) =>
+    createGPUBuffer(device, p, isUniform)
+  );
   let dataBuffers = createDataBuffers(device, tf_model, batch_size);
 
   // create bind group layout
@@ -211,6 +192,12 @@ async function createMLP(tf_model, batch_size = 1024, tile_size = 16) {
 
   let layers = [];
 
+  console.log("data buffers: ", dataBuffers);
+  console.log("weight buffers: ", weightBuffers);
+  console.log("bias buffers: ", biasBuffers);
+  console.log("compute params buffers: ", computeParamsBuffers);
+
+  console.log("auto layout: ", layout);
   // create layers
   for (let i = 0; i < tf_model.length; i++) {
     let bindGroup = device.createBindGroup({
@@ -240,160 +227,160 @@ async function createMLP(tf_model, batch_size = 1024, tile_size = 16) {
   return new MLP(layers);
 }
 
-async function linear(x, weights, batchSize, in_features, out_features, ts) {
-  // // Initialize WebGPU
-  const { device, shaderModule } = await initWebGPU(ts);
+// async function linear(x, weights, batchSize, in_features, out_features, ts) {
+//   // // Initialize WebGPU
+//   const { device, shaderModule } = await initWebGPU(ts);
 
-  const y = new Float32Array(batchSize * out_features).fill(0);
+//   const y = new Float32Array(batchSize * out_features).fill(0);
 
-  // Create params buffer and write data to it
-  const paramsBuffer = device.createBuffer({
-    size: 4 * 4, // 2 uint32s of 4 bytes each (width, height, activation)
-    usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.UNIFORM,
-    mappedAtCreation: true,
-  });
+//   // Create params buffer and write data to it
+//   const paramsBuffer = device.createBuffer({
+//     size: 4 * 4, // 2 uint32s of 4 bytes each (width, height, activation)
+//     usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.UNIFORM,
+//     mappedAtCreation: true,
+//   });
 
-  new Uint32Array(paramsBuffer.getMappedRange()).set([
-    batchSize,
-    in_features,
-    out_features,
-    Activation.ReLU,
-  ]);
-  paramsBuffer.unmap();
+//   new Uint32Array(paramsBuffer.getMappedRange()).set([
+//     batchSize,
+//     in_features,
+//     out_features,
+//     Activation.ReLU,
+//   ]);
+//   paramsBuffer.unmap();
 
-  // Create and populate buffers
-  const [xBuffer, weightsBuffer, yBuffer] = [x, weights, y].map((arr) =>
-    device.createBuffer({
-      size: arr.byteLength,
-      usage:
-        GPUBufferUsage.STORAGE |
-        GPUBufferUsage.COPY_SRC |
-        GPUBufferUsage.COPY_DST,
-      mappedAtCreation: true,
-    })
-  );
+//   // Create and populate buffers
+//   const [xBuffer, weightsBuffer, yBuffer] = [x, weights, y].map((arr) =>
+//     device.createBuffer({
+//       size: arr.byteLength,
+//       usage:
+//         GPUBufferUsage.STORAGE |
+//         GPUBufferUsage.COPY_SRC |
+//         GPUBufferUsage.COPY_DST,
+//       mappedAtCreation: true,
+//     })
+//   );
 
-  // staging buffer to make data accessible to CPU
-  const stagingBuffer = device.createBuffer({
-    size: y.byteLength,
-    usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST,
-  });
+//   // staging buffer to make data accessible to CPU
+//   const stagingBuffer = device.createBuffer({
+//     size: y.byteLength,
+//     usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST,
+//   });
 
-  new Float32Array(xBuffer.getMappedRange()).set(x);
-  new Float32Array(weightsBuffer.getMappedRange()).set(weights);
-  new Float32Array(yBuffer.getMappedRange()).set(y);
-  xBuffer.unmap();
-  weightsBuffer.unmap();
-  yBuffer.unmap();
+//   new Float32Array(xBuffer.getMappedRange()).set(x);
+//   new Float32Array(weightsBuffer.getMappedRange()).set(weights);
+//   new Float32Array(yBuffer.getMappedRange()).set(y);
+//   xBuffer.unmap();
+//   weightsBuffer.unmap();
+//   yBuffer.unmap();
 
-  const bindGroupLayout = device.createBindGroupLayout({
-    entries: [
-      {
-        binding: 0,
-        visibility: GPUShaderStage.COMPUTE,
-        buffer: {
-          type: "read-only-storage",
-        },
-      },
-      {
-        binding: 1,
-        visibility: GPUShaderStage.COMPUTE,
-        buffer: {
-          type: "read-only-storage",
-        },
-      },
-      {
-        binding: 2,
-        visibility: GPUShaderStage.COMPUTE,
-        buffer: {
-          type: "storage",
-        },
-      },
-      {
-        binding: 3,
-        visibility: GPUShaderStage.COMPUTE,
-        buffer: {
-          type: "uniform",
-        },
-      },
-    ],
-  });
+//   const bindGroupLayout = device.createBindGroupLayout({
+//     entries: [
+//       {
+//         binding: 0,
+//         visibility: GPUShaderStage.COMPUTE,
+//         buffer: {
+//           type: "read-only-storage",
+//         },
+//       },
+//       {
+//         binding: 1,
+//         visibility: GPUShaderStage.COMPUTE,
+//         buffer: {
+//           type: "read-only-storage",
+//         },
+//       },
+//       {
+//         binding: 2,
+//         visibility: GPUShaderStage.COMPUTE,
+//         buffer: {
+//           type: "storage",
+//         },
+//       },
+//       {
+//         binding: 3,
+//         visibility: GPUShaderStage.COMPUTE,
+//         buffer: {
+//           type: "uniform",
+//         },
+//       },
+//     ],
+//   });
 
-  let start = performance.now();
+//   let start = performance.now();
 
-  // Bind group
-  const bindGroup = device.createBindGroup({
-    layout: bindGroupLayout,
-    entries: [
-      { binding: 0, resource: { buffer: xBuffer } },
-      { binding: 1, resource: { buffer: weightsBuffer } },
-      { binding: 2, resource: { buffer: yBuffer } },
-      { binding: 3, resource: { buffer: paramsBuffer } },
-    ],
-  });
+//   // Bind group
+//   const bindGroup = device.createBindGroup({
+//     layout: bindGroupLayout,
+//     entries: [
+//       { binding: 0, resource: { buffer: xBuffer } },
+//       { binding: 1, resource: { buffer: weightsBuffer } },
+//       { binding: 2, resource: { buffer: yBuffer } },
+//       { binding: 3, resource: { buffer: paramsBuffer } },
+//     ],
+//   });
 
-  // Create pipeline
-  const pipeline = device.createComputePipeline({
-    layout: device.createPipelineLayout({
-      bindGroupLayouts: [bindGroupLayout],
-    }),
-    compute: {
-      module: shaderModule,
-      entryPoint: "main",
-    },
-  });
+//   // Create pipeline
+//   const pipeline = device.createComputePipeline({
+//     layout: device.createPipelineLayout({
+//       bindGroupLayouts: [bindGroupLayout],
+//     }),
+//     compute: {
+//       module: shaderModule,
+//       entryPoint: "main",
+//     },
+//   });
 
-  // Command encoder and pass
-  const commandEncoder = device.createCommandEncoder();
-  const passEncoder = commandEncoder.beginComputePass();
-  passEncoder.setPipeline(pipeline);
-  passEncoder.setBindGroup(0, bindGroup);
-  passEncoder.dispatchWorkgroups(
-    Math.ceil(out_features / ts),
-    Math.ceil(batchSize / ts)
-  );
-  passEncoder.end();
+//   // Command encoder and pass
+//   const commandEncoder = device.createCommandEncoder();
+//   const passEncoder = commandEncoder.beginComputePass();
+//   passEncoder.setPipeline(pipeline);
+//   passEncoder.setBindGroup(0, bindGroup);
+//   passEncoder.dispatchWorkgroups(
+//     Math.ceil(out_features / ts),
+//     Math.ceil(batchSize / ts)
+//   );
+//   passEncoder.end();
 
-  // Copy output buffer to staging buffer
-  commandEncoder.copyBufferToBuffer(
-    yBuffer,
-    0, // Source offset
-    stagingBuffer,
-    0, // Destination offset
-    y.byteLength
-  );
+//   // Copy output buffer to staging buffer
+//   commandEncoder.copyBufferToBuffer(
+//     yBuffer,
+//     0, // Source offset
+//     stagingBuffer,
+//     0, // Destination offset
+//     y.byteLength
+//   );
 
-  // Submit and execute
-  device.queue.submit([commandEncoder.finish()]);
+//   // Submit and execute
+//   device.queue.submit([commandEncoder.finish()]);
 
-  let end = performance.now();
+//   let end = performance.now();
 
-  console.log("GPU Time: ", end - start, "ms");
+//   console.log("GPU Time: ", end - start, "ms");
 
-  // map staging buffer to read results back to JS
-  await stagingBuffer.mapAsync(
-    GPUMapMode.READ,
-    0, // Offset
-    y.byteLength // Length
-  );
+//   // map staging buffer to read results back to JS
+//   await stagingBuffer.mapAsync(
+//     GPUMapMode.READ,
+//     0, // Offset
+//     y.byteLength // Length
+//   );
 
-  const copyArrayBuffer = stagingBuffer.getMappedRange(0, y.byteLength);
-  const data = copyArrayBuffer.slice();
-  stagingBuffer.unmap();
+//   const copyArrayBuffer = stagingBuffer.getMappedRange(0, y.byteLength);
+//   const data = copyArrayBuffer.slice();
+//   stagingBuffer.unmap();
 
-  console.log("GPU result: ", new Float32Array(data));
+//   console.log("GPU result: ", new Float32Array(data));
 
-  return new Float32Array(data);
-}
+//   return new Float32Array(data);
+// }
 
 // all must be divisible by tile_size
 let batch_size = 16384;
-let input_size = 32;
-let output_size = 64;
-let tile_size = 16; // must not be bigger than 16
+// let input_size = 32;
+// let output_size = 64;
+let tile_size = 2; // must not be bigger than 16
 
-let X = generate_random_matrix(batch_size, input_size);
-let W = generate_random_matrix(input_size, output_size);
+// let X = generate_random_matrix(batch_size, input_size);
+// let W = generate_random_matrix(input_size, output_size);
 
 // let X = new Float32Array([
 //   1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12,
@@ -419,6 +406,8 @@ let W = generate_random_matrix(input_size, output_size);
 const path = "https://jakobtroidl.github.io/data/trainedModel/model.json";
 from_tfjs(path).then((model) => {
   createMLP(model, batch_size, tile_size).then((mlp) => {
+    let X = generate_random_matrix(batch_size, mlp.getInputSize());
+    mlp.inference(X);
     console.log("mlp", mlp);
   });
 });
