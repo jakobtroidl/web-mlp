@@ -7,32 +7,29 @@ export async function from_tfjs(path) {
   let layers = [];
 
   try {
-    model.layers.forEach((layer, i) => {
-      if (i == 0) {
-        if (layer.getClassName() != "Dense") {
-          throw new Error("Only dense layers are supported in WebMLP");
-        }
-        const w = layer.getWeights();
-
-        // collect weights
-        let w_tensor = w[0];
-        let w_array = new Float32Array(linearizeRowMajor(w_tensor.dataSync()));
-        // collect biases
-        let b_tensor = w[1];
-        let b_array = new Float32Array(linearizeRowMajor(b_tensor.dataSync()));
-
-        const layerObject = {
-          weights: w_array,
-          weight_shape: w_tensor.shape,
-          biases: b_array,
-          bias_shape: b_tensor.shape,
-          activation: layer.activation,
-        };
-
-        layers.push(layerObject);
+    model.layers.forEach((layer) => {
+      if (layer.getClassName() != "Dense") {
+        throw new Error("Only dense layers are supported in WebMLP");
       }
-    });
+      const w = layer.getWeights();
 
+      // collect weights
+      let w_tensor = w[0];
+      let w_array = new Float32Array(linearizeRowMajor(w_tensor.dataSync()));
+      // collect biases
+      let b_tensor = w[1];
+      let b_array = new Float32Array(linearizeRowMajor(b_tensor.dataSync()));
+
+      const layerObject = {
+        weights: w_array,
+        weight_shape: w_tensor.shape,
+        biases: b_array,
+        bias_shape: b_tensor.shape,
+        activation: layer.activation,
+      };
+
+      layers.push(layerObject);
+    });
     return layers;
   } catch (e) {
     console.error(e);

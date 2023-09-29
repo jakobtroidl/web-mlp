@@ -40,6 +40,8 @@ export class MLP {
       outputBytes
     );
 
+    this.device.queue.submit([commandEncoder.finish()]);
+
     // map staging buffer to read results back to JS
     await this.stagingBuffer.mapAsync(
       GPUMapMode.READ,
