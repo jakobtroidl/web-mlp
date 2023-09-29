@@ -21,8 +21,9 @@ fn activation(x: f32, activation: u32) -> f32 {
 
 @group(0) @binding(0) var<storage> X: array<f32>; // input matrix
 @group(0) @binding(1) var<storage> W: array<f32>; // weight matrix
-@group(0) @binding(2) var<storage, read_write> Y: array<f32>; // output matrix
-@group(0) @binding(3) var<uniform> params : Params;
+@group(0) @binding(2) var<storage> B: array<f32>; // bias matrix
+@group(0) @binding(3) var<storage, read_write> Y: array<f32>; // output matrix
+@group(0) @binding(4) var<uniform> params : Params;
 
 var<workgroup> tileX : array<array<f32, TILE_SIZE>, TILE_SIZE>;
 var<workgroup> tileW : array<array<f32, TILE_SIZE>, TILE_SIZE>;
