@@ -30,28 +30,28 @@ async function initWebGPU(ts) {
   return { device, shaderModule };
 }
 
-function loadWeights(config) {
-  return config.weights.map((w) => {
-    return new Float32Array(w.data);
-  });
-}
+// function loadWeights(config) {
+//   return config.weights.map((w) => {
+//     return new Float32Array(w.data);
+//   });
+// }
 
-function loadBiases(config) {
-  return config.biases.map((b) => {
-    return new Float32Array(b.data);
-  });
-}
+// function loadBiases(config) {
+//   return config.biases.map((b) => {
+//     return new Float32Array(b.data);
+//   });
+// }
 
-function loadComputeParams(config, batch_size) {
-  let n_layers = config.params.n_layers;
+function loadComputeParams(model, batch_size) {
+  let n_layers = model.length;
   let params = [];
 
   for (let i = 0; i < n_layers; i++) {
     let layerParam = [
       batch_size, // batch_size,
-      i == 0 ? config.params.n_inputs : config.params.n_neurons, // in_features,
-      i == n_layers - 1 ? config.params.n_outputs : config.params.n_neurons, // out_features,
-      getActivation(config.params.activation), // activation
+      model[i].weight_shape[0], // in_features,
+      model[i].weight_shape[1], // out_features,
+      getActivation(model[i].activation), // activation
     ];
 
     layerParam = new Uint32Array(layerParam);
@@ -61,22 +61,23 @@ function loadComputeParams(config, batch_size) {
   return params;
 }
 
-function createDataBuffers(device, config, batch_size) {
+function createDataBuffers(device, model, batch_size) {
+  console.log("model: ", model);
   let dataBuffers = [];
-  let n_buffers = config.params.n_layers + 1;
+  let n_buffers = model.length + 1;
 
   console.log("n_buffers: ", n_buffers);
   for (let i = 0; i < n_buffers; i++) {
     let bufferSize = 0.0;
     if (i == 0) {
       // input layer size
-      bufferSize = batch_size * config.params.n_inputs;
+      bufferSize = batch_size * model[i].weight_shape[0];
     } else if (i == n_buffers - 1) {
       // output layer size
-      bufferSize = batch_size * config.params.n_outputs;
+      bufferSize = batch_size * model[i - 1].weight_shape[1];
     } else {
       // hidden layer size
-      bufferSize = batch_size * config.params.n_neurons;
+      bufferSize = batch_size * model[i].weight_shape[0];
     }
     // initialize all data buffers with zeros
     let data = new Float32Array(bufferSize).fill(0);
@@ -155,52 +156,54 @@ function getComputePipeline(device, shaderModule, bindGroupLayout) {
   });
 }
 
-function createLayers(
-  device,
-  computePipeline,
-  bindGroupLayout,
-  config,
-  batch_size,
-  tile_size,
-  dataBuffers,
-  weightBuffers,
-  biasBuffers,
-  computeParamsBuffers
-) {
-  let layers = [];
-  let n_layers = config.params.n_layers;
+// function createLayers(
+//   device,
+//   computePipeline,
+//   bindGroupLayout,
+//   config,
+//   batch_size,
+//   tile_size,
+//   dataBuffers,
+//   weightBuffers,
+//   biasBuffers,
+//   computeParamsBuffers
+// ) {
+//   let layers = [];
+//   let n_layers = config.params.n_layers;
 
-  for (let i = 0; i < n_layers; i++) {
-    let layer = new Linear(
-      device,
-      computePipeline,
-      bindGroupLayout,
-      batch_size,
-      config.params.n_outputs,
-      tile_size,
-      dataBuffers[i],
-      weightBuffers[i],
-      biasBuffers[i],
-      computeParamsBuffers[i],
-      dataBuffers[i + 1]
-    );
-    layers.push(layer);
-  }
-  return layers;
-}
+//   for (let i = 0; i < n_layers; i++) {
+//     let layer = new Linear(
+//       device,
+//       computePipeline,
+//       bindGroupLayout,
+//       batch_size,
+//       config.params.n_outputs,
+//       tile_size,
+//       dataBuffers[i],
+//       weightBuffers[i],
+//       biasBuffers[i],
+//       computeParamsBuffers[i],
+//       dataBuffers[i + 1]
+//     );
+//     layers.push(layer);
+//   }
+//   return layers;
+// }
 
-async function createMLP(config, batch_size = 1024, tile_size = 16) {
+async function createMLP(tf_model, batch_size = 1024, tile_size = 16) {
   const { device, shaderModule } = await initWebGPU();
 
-  let weights = loadWeights(config);
-  let biases = loadBiases(config);
-  let params = loadComputeParams(config, batch_size);
+  let params = loadComputeParams(tf_model, batch_size);
 
   // create buffers
-  let weightBuffers = weights.map((w) => createGPUBuffer(device, w));
-  let biasBuffers = biases.map((b) => createGPUBuffer(device, b));
+  let weightBuffers = tf_model.map((layer) =>
+    createGPUBuffer(device, layer.weights)
+  );
+  let biasBuffers = tf_model.map((layer) =>
+    createGPUBuffer(device, layer.biases)
+  );
   let computeParamsBuffers = params.map((p) => createGPUBuffer(device, p));
-  let dataBuffers = createDataBuffers(device, config, batch_size);
+  let dataBuffers = createDataBuffers(device, tf_model, batch_size);
 
   // create bind group layout
   let perLayerBindLayout = getPerLayerBindLayout(device);
@@ -210,18 +213,33 @@ async function createMLP(config, batch_size = 1024, tile_size = 16) {
     perLayerBindLayout
   );
 
-  let layers = createLayers(
-    device,
-    computePipeline,
-    perLayerBindLayout,
-    config,
-    batch_size,
-    tile_size,
-    dataBuffers,
-    weightBuffers,
-    biasBuffers,
-    computeParamsBuffers
-  );
+  let layers = [];
+
+  // create layers
+  for (let i = 0; i < tf_model.length; i++) {
+    let bindGroup = device.createBindGroup({
+      layout: layout,
+      entries: [
+        { binding: 0, resource: { buffer: dataBuffers[i] } },
+        { binding: 1, resource: { buffer: weightBuffers[i] } },
+        { binding: 2, resource: { buffer: biasBuffers[i] } },
+        { binding: 3, resource: { buffer: dataBuffers[i + 1] } },
+        { binding: 4, resource: { buffer: computeParamsBuffers[i] } },
+      ],
+    });
+
+    layers.push(
+      new Linear(
+        device,
+        bindGroup,
+        computePipeline,
+        tf_model[i].weight_shape[0],
+        tf_model[i].weight_shape[1],
+        batch_size,
+        tile_size
+      )
+    );
+  }
 
   return new MLP(layers);
 }
@@ -403,10 +421,8 @@ let W = generate_random_matrix(input_size, output_size);
 // );
 
 const path = "https://jakobtroidl.github.io/data/trainedModel/model.json";
-from_tfjs(path).then((res) => {
-  console.log(res);
+from_tfjs(path).then((model) => {
+  createMLP(model, batch_size, tile_size).then((mlp) => {
+    console.log("mlp", mlp);
+  });
 });
-
-// console.log("config", mlp_config);
-// let mlp = await createMLP(mlp_config);
-//mlp.inference(X);

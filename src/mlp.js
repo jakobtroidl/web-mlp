@@ -3,63 +3,49 @@ export class MLP {
     this.layers = layers;
   }
 
-  inference(data) {
-    // map data to first data buffer
+  // inference(data) {
+  //   // map data to first data buffer
 
-    for (let i = 0; i < this.layers.length; i++) {
-      this.layers[i].inference();
-    }
+  //   for (let i = 0; i < this.layers.length; i++) {
+  //     this.layers[i].inference();
+  //   }
 
-    return "Something has happened";
-  }
+  //   return "Something has happened";
+  // }
 }
 
 export class Linear {
   constructor(
     device,
+    bindGroup,
     computePipeline,
-    layout,
+    inputSize,
+    outputSize,
     batchSize,
-    out_features,
-    tile_size,
-    inputBuffer,
-    weightsBuffer,
-    biasBuffer,
-    paramsBuffer,
-    outputBuffer
+    tile_size
   ) {
     this.device = device;
+    this.bindGroup = bindGroup;
     this.computePipeline = computePipeline;
-    this.inputBuffer = inputBuffer;
-    this.weightsBuffer = weightsBuffer;
-    this.biasBuffer = biasBuffer;
-    this.paramsBuffer = paramsBuffer;
-    this.outputBuffer = outputBuffer;
-
-    this.bindGroup = device.createBindGroup({
-      layout: layout,
-      entries: [
-        { binding: 0, resource: { buffer: this.inputBuffer } },
-        { binding: 1, resource: { buffer: this.weightsBuffer } },
-        // { binding: 2, resource: { buffer: this.biasBuffer } },
-        { binding: 2, resource: { buffer: this.outputBuffer } },
-        { binding: 3, resource: { buffer: this.paramsBuffer } },
-      ],
-    });
-
-    this.commandEncoder = device.createCommandEncoder();
-    this.passEncoder = this.commandEncoder.beginComputePass();
-    this.passEncoder.setPipeline(this.computePipeline);
-    this.passEncoder.setBindGroup(0, this.bindGroup);
-    this.passEncoder.dispatchWorkgroups(
-      Math.ceil(out_features / tile_size),
-      Math.ceil(batchSize / tile_size)
-    );
-    this.passEncoder.end();
+    this.inputSize = inputSize;
+    this.outputSize = outputSize;
+    this.batchSize = batchSize;
+    this.tile_size = tile_size;
   }
 
   inference() {
     console.log("Linear inference");
-    this.device.queue.submit([this.commandEncoder.finish()]);
+
+    let commandEncoder = this.device.createCommandEncoder();
+    let passEncoder = commandEncoder.beginComputePass();
+    passEncoder.setPipeline(this.computePipeline);
+    passEncoder.setBindGroup(0, this.bindGroup);
+    passEncoder.dispatchWorkgroups(
+      Math.ceil(this.outputSize / this.tile_size),
+      Math.ceil(this.batchSize / this.tile_size)
+    );
+    passEncoder.end();
+
+    this.device.queue.submit([commandEncoder.finish()]);
   }
 }
