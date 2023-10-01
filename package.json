@@ -1,13 +1,14 @@
 {
   "name": "web-mlp",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "",
   "main": "index.js",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "deploy": "gh-pages -d dist"
+    "deploy": "gh-pages -d dist",
+    "test": "npx playwright test --project=chromium"
   },
   "author": "Jakob Troidl <jtroidl@g.harvard.edu>",
   "license": "ISC",
@@ -17,6 +18,8 @@
     "vite": "^2.8.6"
   },
   "devDependencies": {
+    "@playwright/test": "^1.38.1",
+    "@types/node": "^20.8.0",
     "gh-pages": "^6.0.0"
   }
 }
