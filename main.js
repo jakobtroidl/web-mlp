@@ -1,6 +1,7 @@
-import tiled_mm from "./src/shaders/tiled_mm.wgsl";
 import { MLP, Linear } from "./src/mlp.js";
 import { from_tfjs } from "./src/modelLoader.js";
+import { initWebGPU } from "./src/setup.js";
+import { gemm } from "./src/gemm.js";
 
 import {
   setTileSize,
@@ -8,28 +9,6 @@ import {
   Activation,
   getActivation,
 } from "./src/utils.js";
-
-async function initWebGPU(ts) {
-  // Initialize WebGPU
-  if (navigator.gpu === undefined) {
-    console.error("WebGPU is not supported.");
-    return;
-  }
-  const adapter = await navigator.gpu.requestAdapter();
-
-  if (!adapter) {
-    console.error("WebGPU is not supported. Failed to find a GPU adapter.");
-    return;
-  }
-
-  console.log("tile_size", ts);
-
-  const device = await adapter.requestDevice();
-  const wgslCode = setTileSize(tiled_mm, ts); // Replace this with your actual WGSL code
-  const shaderModule = device.createShaderModule({ code: wgslCode });
-
-  return { device, shaderModule };
-}
 
 function loadComputeParams(model, batch_size) {
   let n_layers = model.length;
@@ -166,11 +145,10 @@ async function createMLP(tf_model, batch_size = 1024, tile_size = 16) {
 
     // console.log("layer.weights", layer.weights);
     // console.log("tmpData", tmpData);
-    
+
     return createGPUBuffer(device, layer.weights);
     //return createGPUBuffer(device, tmpData);
   });
-
 
   console.log("weightBuffers", weightBuffers);
 
@@ -221,151 +199,30 @@ async function createMLP(tf_model, batch_size = 1024, tile_size = 16) {
   return new MLP(device, layers);
 }
 
-// async function linear(x, weights, batchSize, in_features, out_features, ts) {
-//   // // Initialize WebGPU
-//   const { device, shaderModule } = await initWebGPU(ts);
-
-//   const y = new Float32Array(batchSize * out_features).fill(0);
-
-//   // Create params buffer and write data to it
-//   const paramsBuffer = device.createBuffer({
-//     size: 4 * 4, // 2 uint32s of 4 bytes each (width, height, activation)
-//     usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.UNIFORM,
-//     mappedAtCreation: true,
-//   });
-
-//   new Uint32Array(paramsBuffer.getMappedRange()).set([
-//     batchSize,
-//     in_features,
-//     out_features,
-//     Activation.ReLU,
-//   ]);
-//   paramsBuffer.unmap();
-
-//   // Create and populate buffers
-//   const [xBuffer, weightsBuffer, yBuffer] = [x, weights, y].map((arr) =>
-//     device.createBuffer({
-//       size: arr.byteLength,
-//       usage:
-//         GPUBufferUsage.STORAGE |
-//         GPUBufferUsage.COPY_SRC |
-//         GPUBufferUsage.COPY_DST,
-//       mappedAtCreation: true,
-//     })
-//   );
-
-//   // staging buffer to make data accessible to CPU
-//   const stagingBuffer = device.createBuffer({
-//     size: y.byteLength,
-//     usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST,
-//   });
-
-//   new Float32Array(xBuffer.getMappedRange()).set(x);
-//   new Float32Array(weightsBuffer.getMappedRange()).set(weights);
-//   new Float32Array(yBuffer.getMappedRange()).set(y);
-//   xBuffer.unmap();
-//   weightsBuffer.unmap();
-//   yBuffer.unmap();
-
-//   const bindGroupLayout = device.createBindGroupLayout({
-//     entries: [
-//       {
-//         binding: 0,
-//         visibility: GPUShaderStage.COMPUTE,
-//         buffer: {
-//           type: "read-only-storage",
-//         },
-//       },
-//       {
-//         binding: 1,
-//         visibility: GPUShaderStage.COMPUTE,
-//         buffer: {
-//           type: "read-only-storage",
-//         },
-//       },
-//       {
-//         binding: 2,
-//         visibility: GPUShaderStage.COMPUTE,
-//         buffer: {
-//           type: "storage",
-//         },
-//       },
-//       {
-//         binding: 3,
-//         visibility: GPUShaderStage.COMPUTE,
-//         buffer: {
-//           type: "uniform",
-//         },
-//       },
-//     ],
-//   });
-
-//   let start = performance.now();
-
-//   // Bind group
-//   const bindGroup = device.createBindGroup({
-//     layout: bindGroupLayout,
-//     entries: [
-//       { binding: 0, resource: { buffer: xBuffer } },
-//       { binding: 1, resource: { buffer: weightsBuffer } },
-//       { binding: 2, resource: { buffer: yBuffer } },
-//       { binding: 3, resource: { buffer: paramsBuffer } },
-//     ],
-//   });
-
-//   // Create pipeline
-//   const pipeline = device.createComputePipeline({
-//     layout: device.createPipelineLayout({
-//       bindGroupLayouts: [bindGroupLayout],
-//     }),
-//     compute: {
-//       module: shaderModule,
-//       entryPoint: "main",
-//     },
-//   });
-
-//   // Command encoder and pass
-//   const commandEncoder = device.createCommandEncoder();
-//   const passEncoder = commandEncoder.beginComputePass();
-//   passEncoder.setPipeline(pipeline);
-//   passEncoder.setBindGroup(0, bindGroup);
-//   passEncoder.dispatchWorkgroups(
-//     Math.ceil(out_features / ts),
-//     Math.ceil(batchSize / ts)
-//   );
-//   passEncoder.end();
-
-//   // Copy output buffer to staging buffer
-//   commandEncoder.copyBufferToBuffer(
-//     yBuffer,
-//     0, // Source offset
-//     stagingBuffer,
-//     0, // Destination offset
-//     y.byteLength
-//   );
-
-//   // Submit and execute
-//   device.queue.submit([commandEncoder.finish()]);
-
-//   let end = performance.now();
-
-//   console.log("GPU Time: ", end - start, "ms");
-
-//   // map staging buffer to read results back to JS
-//   await stagingBuffer.mapAsync(
-//     GPUMapMode.READ,
-//     0, // Offset
-//     y.byteLength // Length
-//   );
-
-// const copyArrayBuffer = stagingBuffer.getMappedRange(0, y.byteLength);
-// const data = copyArrayBuffer.slice();
-// stagingBuffer.unmap();
-
-// console.log("GPU result: ", new Float32Array(data));
-
-// return new Float32Array(data);
-// }
+async function testGemm() {
+  let A = new Float32Array([
+    1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16,
+  ]);
+  let B = new Float32Array([
+    1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16,
+  ]);
+  let Y = new Float32Array([
+    90, 100, 110, 116, 202, 228, 254, 272, 314, 356, 398, 428, 413, 470, 527,
+    569,
+  ]);
+  let batch_size = 4;
+  let in_features = 4;
+  let out_features = 4;
+  let tile_size = 2;
+  let result = await gemm(
+    A,
+    B,
+    batch_size,
+    in_features,
+    out_features,
+    tile_size
+  );
+}
 
 async function testMLP() {
   let batch_size = 70000;
@@ -380,4 +237,5 @@ async function testMLP() {
   console.log("result", result);
 }
 
+testGemm();
 testMLP();
