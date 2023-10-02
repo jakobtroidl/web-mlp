@@ -2,10 +2,14 @@ import { MLP, Linear } from "./src/mlp.js";
 import { from_tfjs } from "./src/modelLoader.js";
 import { initWebGPU } from "./src/setup.js";
 import { gemm } from "./src/gemm.js";
+import * as tf from "@tensorflow/tfjs";
+
+
 
 import {
   setTileSize,
   generate_random_matrix,
+  mlp_test_data,
   Activation,
   getActivation,
 } from "./src/utils.js";
@@ -139,15 +143,7 @@ async function createMLP(tf_model, batch_size = 1024, tile_size = 16) {
 
   // create buffers
   let weightBuffers = tf_model.map((layer) => {
-    // let size = layer.weight_shape[0] * layer.weight_shape[1];
-    // console.log("size", size);
-    // let tmpData = new Float32Array(size).fill(0.45);
-
-    // console.log("layer.weights", layer.weights);
-    // console.log("tmpData", tmpData);
-
     return createGPUBuffer(device, layer.weights);
-    //return createGPUBuffer(device, tmpData);
   });
 
   console.log("weightBuffers", weightBuffers);
@@ -200,20 +196,26 @@ async function createMLP(tf_model, batch_size = 1024, tile_size = 16) {
 }
 
 async function testGemm() {
-  let A = new Float32Array([
-    1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16,
-  ]);
-  let B = new Float32Array([
-    1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16,
-  ]);
-  let Y = new Float32Array([
-    90, 100, 110, 116, 202, 228, 254, 272, 314, 356, 398, 428, 413, 470, 527,
-    569,
-  ]);
-  let batch_size = 4;
-  let in_features = 4;
-  let out_features = 4;
-  let tile_size = 2;
+  
+  let batch_size = 70000;
+  let in_features = 100;
+  let out_features = 2;
+  let tile_size = 16;
+
+  let A = generate_random_matrix(batch_size, in_features);
+  let B = generate_random_matrix(in_features, out_features);
+
+  // let A = new Float32Array([
+  //   1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16,
+  // ]);
+  // let B = new Float32Array([
+  //   1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16,
+  // ]);
+  // let Y = new Float32Array([
+  //   90, 100, 110, 116, 202, 228, 254, 272, 314, 356, 398, 428, 413, 470, 527,
+  //   569,
+  // ]);
+
   let result = await gemm(
     A,
     B,
@@ -224,18 +226,38 @@ async function testGemm() {
   );
 }
 
+async function testTensorFlowMLP() {
+  const path = "https://jakobtroidl.github.io/data/trainedModelwoBias/model.json";
+
+  const loadedModel = await tf.loadLayersModel(path);
+  let start = performance.now();
+  const result = await loadedModel.predict(tf.tensor2d([[0, 0.625, 0.495, 0.165, 1.262, 0.507, 0.318, 0.39]]));
+  let end = performance.now();
+  console.log("tensorflow js Inference time: ", end - start, "ms");
+  console.log( "Ground Truth: "+ result.dataSync());
+}
+
 async function testMLP() {
-  let batch_size = 70000;
+  let batch_size = 1;
   let tile_size = 8; // must not be bigger than 16
-  const path = "https://jakobtroidl.github.io/data/trainedModel/model.json";
+  const path = "https://jakobtroidl.github.io/data/trainedModelwoBias/model.json";
   let tfjs_model = await from_tfjs(path);
   let model = await createMLP(tfjs_model, batch_size, tile_size);
 
+  console.log("tfjs_model", tfjs_model);
+  console.log("model", model);
+
   console.log(batch_size, model.inputSize, model.outputSize);
-  let X = generate_random_matrix(batch_size, model.inputSize);
-  let result = await model.inference(X);
+  // let X = generate_random_matrix(batch_size, model.inputSize);
+  let X = mlp_test_data(batch_size);
+  let start = performance.now();
+  let result = await model.inference(X); // result should be 11.881376266479492
+  let end = performance.now();
+  console.log("Inference time: ", end - start, "ms");
   console.log("result", result);
 }
 
-testGemm();
+// testGemm();
+
+testTensorFlowMLP()
 testMLP();

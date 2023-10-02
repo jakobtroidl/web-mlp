@@ -10,6 +10,19 @@ export function generate_random_matrix(w, h) {
   return Float32Array.from(Array(w * h).fill(0), () => Math.random());
 }
 
+
+
+
+export function mlp_test_data(batch_size)
+{
+  return new Float32Array([
+    0, 0.625, 0.495, 0.165, 1.262, 0.507, 0.318, 0.39,
+    // 0, 0.625, 0.495, 0.165, 1.262, 0.507, 0.318, 0.39,
+    // 0, 0.625, 0.495, 0.165, 1.262, 0.507, 0.318, 0.39,
+    // 0, 0.625, 0.495, 0.165, 1.262, 0.507, 0.318, 0.39
+  ]);
+}
+
 export function linearizeRowMajor(twoDArray) {
   return twoDArray.reduce((acc, row) => acc.concat(row), []);
 }

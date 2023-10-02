@@ -18,6 +18,9 @@ export async function from_tfjs(path) {
       let w_array = new Float32Array(linearizeRowMajor(w_tensor.dataSync()));
       // collect biases
       let b_tensor = w[1];
+      if (b_tensor == null) {
+        b_tensor = tf.zeros([w_tensor.shape[1]]);
+      }
       let b_array = new Float32Array(linearizeRowMajor(b_tensor.dataSync()));
 
       const layerObject = {
