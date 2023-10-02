@@ -48,13 +48,13 @@ export function getActivation(act_string) {
   switch (act_string) {
     case "ReLU":
       return Activation.ReLU;
-    case "Sigmoid":
+    case "Sigmoid2":
       return Activation.Sigmoid;
     case "Tanh":
       return Activation.Tanh;
-    case "None":
+    case "Linear":
       return Activation.None;
     default:
-      return Activation.None;
+      return console.error("Activation not supported");
   }
 }

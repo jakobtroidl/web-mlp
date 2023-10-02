@@ -25,7 +25,7 @@ export async function from_tfjs(path) {
         weight_shape: w_tensor.shape,
         biases: b_array,
         bias_shape: b_tensor.shape,
-        activation: layer.activation,
+        activation: layer.activation.constructor.name,
       };
 
       layers.push(layerObject);
