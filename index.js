@@ -262,5 +262,4 @@ async function testMLP() {
 // testTensorFlowMLP();
 // testMLP();
 
-export default createMLP;
-export { from_tfjs } from "./src/modelLoader.js";
+export { createMLP, from_tfjs };
