@@ -77,7 +77,6 @@ fn main(
     let checkYCols: bool = col < params.out_features;
 
     if (checkYRows && checkYCols) {
-         //Y[row * params.out_features + col] = activation(sum, params.activation) + B[col];   
-         Y[row * params.out_features + col] = sum;   
+         Y[row * params.out_features + col] = activation(sum  + B[col], params.activation);   
     }
 }
