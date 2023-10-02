@@ -102,7 +102,7 @@ export async function gemm(
     ],
   });
 
-  let start = performance.now();
+
 
   // Bind group
   const bindGroup = device.createBindGroup({
@@ -147,9 +147,13 @@ export async function gemm(
     y.byteLength
   );
 
+  await device.queue.onSubmittedWorkDone();
+
+  let start = performance.now();
   // Submit and execute
   device.queue.submit([commandEncoder.finish()]);
-
+  await device.queue.onSubmittedWorkDone();
+  
   let end = performance.now();
 
   console.log("GPU Time: ", end - start, "ms");
