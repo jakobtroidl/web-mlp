@@ -7,8 +7,7 @@
     "dev": "vite dev --host --port 8000",
     "build": "vite build",
     "preview": "vite preview",
-    "deploy": "gh-pages -d dist",
-    "test": "npx playwright test --project=chromium"
+    "deploy": "gh-pages -d dist"
   },
   "author": "Jakob Troidl <jtroidl@g.harvard.edu>",
   "license": "ISC",
