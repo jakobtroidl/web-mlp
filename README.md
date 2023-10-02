@@ -30,12 +30,6 @@ npm install
 npm run dev
 ```
 
-## Testing
-
-```sh
-npm test
-```
-
 ## Building
 
 ```sh
