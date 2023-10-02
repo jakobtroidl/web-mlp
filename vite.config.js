@@ -13,12 +13,6 @@ export default defineConfig({
       fileName: "web-mlp",
       formats: ["es"],
     },
-    // rollupOptions: {
-    //   input: ["index.js"],
-    //   output: {
-    //     file: "dist/web-mlp.js",
-    //   },
-    // },
   },
   // This is here because of https://github.com/vitejs/vite/issues/7287
   optimizeDeps: {
