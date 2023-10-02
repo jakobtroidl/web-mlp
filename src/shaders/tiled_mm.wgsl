@@ -44,10 +44,26 @@ fn main(
     let col: u32 = group_x * TILE_SIZE + local_x;
 
     //Loop over tiles
-    for (var t = 0u; t < params.in_features / TILE_SIZE; t = t + 1u) {
+    for (var t = 0u; t < ( TILE_SIZE + params.in_features - 1) / TILE_SIZE; t = t + 1u) {
         // Load data into shared memory
-        tileX[local_y][local_x] = X[row * params.in_features + (t * TILE_SIZE + local_x)];
-        tileW[local_y][local_x] = W[(t * TILE_SIZE + local_y) * params.out_features + col];
+        
+        let checkXCols: bool = t * TILE_SIZE + local_x < params.in_features;
+        let checkXRows: bool = row < params.batch_size;
+
+        if (checkXCols && checkXRows) {
+            tileX[local_y][local_x] = X[row * params.in_features + (t * TILE_SIZE + local_x)];
+        } else {
+             tileX[local_y][local_x] = 0.0;
+        }
+
+        let checkWRows: bool = t * TILE_SIZE + local_y < params.in_features;
+        let checkWCols: bool = col < params.out_features;
+
+        if (checkWRows && checkWCols) {
+            tileW[local_y][local_x] = W[(t * TILE_SIZE + local_y) * params.out_features + col];
+        } else {
+             tileW[local_y][local_x] = 0.0;
+        }
         workgroupBarrier();
 
         // Compute partial results
@@ -57,5 +73,10 @@ fn main(
         workgroupBarrier();
     }
 
-    Y[row * params.out_features + col] = sum;   
+    let checkYRows: bool = row < params.batch_size;
+    let checkYCols: bool = col < params.out_features;
+
+    if (checkYRows && checkYCols) {
+         Y[row * params.out_features + col] = sum;   
+    }
 }
