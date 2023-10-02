@@ -87,6 +87,8 @@ export function getActivation(act_string) {
       return Activation.ReLU;
     case "Sigmoid2":
       return Activation.Sigmoid;
+    case "Sigmoid":
+      return Activation.Sigmoid;
     case "Tanh":
       return Activation.Tanh;
     case "Linear":

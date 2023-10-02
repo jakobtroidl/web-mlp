@@ -130,10 +130,7 @@ function getComputePipeline(device, shaderModule, layout) {
 
 async function createMLP(tf_model, batch_size = 1024, tile_size = 16) {
   const { device, shaderModule } = await initWebGPU(tile_size);
-
   let params = loadComputeParams(tf_model, batch_size);
-
-  console.log("tf model", tf_model);
 
   // create buffers
   let weightBuffers = tf_model.map((layer) => {
@@ -262,5 +259,4 @@ async function testMLP() {
 // testTensorFlowMLP();
 // testMLP();
 
-export default createMLP;
-export { from_tfjs } from "./src/modelLoader.js";
+export { createMLP, from_tfjs };

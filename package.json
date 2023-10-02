@@ -1,8 +1,8 @@
 {
   "name": "web-mlp",
-  "version": "0.0.5",
+  "version": "0.1.2",
   "description": "",
-  "main": "index.js",
+  "main": "dist/web-mlp.es.js",
   "files": [
     "src/*",
     "dist/*"

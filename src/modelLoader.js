@@ -6,6 +6,8 @@ export async function from_tfjs(path) {
   const model = await tf.loadLayersModel(path);
   let layers = [];
 
+  console.log(model);
+
   try {
     model.layers.forEach((layer) => {
       if (layer.getClassName() != "Dense") {
