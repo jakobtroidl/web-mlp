@@ -1,24 +1,30 @@
 import { defineConfig } from "vite";
+import { resolve } from "path";
 
 export default defineConfig({
   build: {
+    emptyOutDir: false,
+    sourcemap: "inline",
     lib: {
       // Could also be a dictionary or array of multiple entry points
-      entry: "index.js",
-      name: "Web-MLP",
+      entry: resolve(__dirname, "index.js"),
+      name: "web-mlp",
       // the proper extensions will be added
       fileName: "web-mlp",
+      formats: ["es"],
     },
-    rollupOptions: {
-      input: ["index.js"],
-    },
-    outDir: "dist",
+    // rollupOptions: {
+    //   input: ["index.js"],
+    //   output: {
+    //     file: "dist/web-mlp.js",
+    //   },
+    // },
   },
   // This is here because of https://github.com/vitejs/vite/issues/7287
   optimizeDeps: {
     exclude: ["@webonnx/wonnx-wasm"],
-    // esbuildOptions: {
-    //   target: "es2020",
-    // },
+    esbuildOptions: {
+      target: "es2020",
+    },
   },
 });

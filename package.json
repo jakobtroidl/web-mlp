@@ -1,9 +1,8 @@
 {
   "name": "web-mlp",
-  "version": "0.0.5",
+  "version": "0.0.7",
   "description": "",
-  "main": "dist/web-mlp.umd.js",
-  "module": "dist/web-mlp.es.js",
+  "main": "dist/web-mlp.es.js",
   "files": [
     "src/*",
     "dist/*"
