@@ -1,8 +1,12 @@
 {
   "name": "web-mlp",
-  "version": "0.0.3",
+  "version": "0.0.5",
   "description": "",
   "main": "index.js",
+  "files": [
+    "src/*",
+    "dist/*"
+  ],
   "scripts": {
     "dev": "vite dev --host --port 8000",
     "build": "vite build",

@@ -4,15 +4,7 @@ import { initWebGPU } from "./src/setup.js";
 import { gemm } from "./src/gemm.js";
 import * as tf from "@tensorflow/tfjs";
 
-
-
-import {
-  setTileSize,
-  generate_random_matrix,
-  mlp_test_data,
-  Activation,
-  getActivation,
-} from "./src/utils.js";
+import { generate_random_matrix, getActivation } from "./src/utils.js";
 
 function loadComputeParams(model, batch_size) {
   let n_layers = model.length;
@@ -141,12 +133,12 @@ async function createMLP(tf_model, batch_size = 1024, tile_size = 16) {
 
   let params = loadComputeParams(tf_model, batch_size);
 
+  console.log("tf model", tf_model);
+
   // create buffers
   let weightBuffers = tf_model.map((layer) => {
     return createGPUBuffer(device, layer.weights);
   });
-
-  console.log("weightBuffers", weightBuffers);
 
   let biasBuffers = tf_model.map((layer) =>
     createGPUBuffer(device, layer.biases)
@@ -196,7 +188,6 @@ async function createMLP(tf_model, batch_size = 1024, tile_size = 16) {
 }
 
 async function testGemm() {
-  
   let batch_size = 70000;
   let in_features = 100;
   let out_features = 2;
@@ -227,37 +218,49 @@ async function testGemm() {
 }
 
 async function testTensorFlowMLP() {
-  const path = "https://jakobtroidl.github.io/data/trainedModelwoBias/model.json";
+  const path =
+    "https://jakobtroidl.github.io/data/trainedModelOriginal/model.json";
 
   const loadedModel = await tf.loadLayersModel(path);
   let start = performance.now();
-  const result = await loadedModel.predict(tf.tensor2d([[0, 0.625, 0.495, 0.165, 1.262, 0.507, 0.318, 0.39]]));
+  const result = await loadedModel.predict(
+    tf.tensor2d([[0, 0.625, 0.495, 0.165, 1.262, 0.507, 0.318, 0.39]])
+  );
   let end = performance.now();
   console.log("tensorflow js Inference time: ", end - start, "ms");
-  console.log( "Ground Truth: "+ result.dataSync());
+  console.log("Ground Truth: " + result.dataSync());
 }
 
 async function testMLP() {
-  let batch_size = 1;
+  let batch_size = 10000;
   let tile_size = 8; // must not be bigger than 16
-  const path = "https://jakobtroidl.github.io/data/trainedModelwoBias/model.json";
+  const path =
+    "https://jakobtroidl.github.io/data/trainedModelOriginal/model.json";
   let tfjs_model = await from_tfjs(path);
   let model = await createMLP(tfjs_model, batch_size, tile_size);
 
-  console.log("tfjs_model", tfjs_model);
-  console.log("model", model);
-
   console.log(batch_size, model.inputSize, model.outputSize);
-  // let X = generate_random_matrix(batch_size, model.inputSize);
-  let X = mlp_test_data(batch_size);
+  let X = generate_random_matrix(batch_size, model.inputSize);
+
   let start = performance.now();
   let result = await model.inference(X); // result should be 11.881376266479492
   let end = performance.now();
-  console.log("Inference time: ", end - start, "ms");
+  console.log("WebMLP Inference time: ", end - start, "ms");
   console.log("result", result);
+
+  const loadedModel = await tf.loadLayersModel(path);
+  start = performance.now();
+  result = await loadedModel.predict(
+    tf.tensor2d(X, [batch_size, model.inputSize])
+  );
+  end = performance.now();
+  console.log("tensorflow js Inference time: ", end - start, "ms");
+  console.log("Ground Truth: " + result.dataSync());
 }
 
 // testGemm();
+// testTensorFlowMLP();
+// testMLP();
 
-testTensorFlowMLP()
-testMLP();
+export default createMLP;
+export { from_tfjs } from "./src/modelLoader.js";
