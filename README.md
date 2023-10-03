@@ -29,7 +29,7 @@ async function testMLP() {
 
 testMLP();
 ```
-Check out the example repository [here](https://github.com/jakobtroidl/webmlp-test) that uses web-mlp. 
+Depending on your computing hardware, you can increase `batch_size` and `tile_size`. Tested on a MacBook Pro 2021 w/ Intel GPU, which supports up to `batch_size=800000` and `tile_size=32`. Check out [this website](https://webgpureport.org/) to view WebGPU limits for your own device. Also, here's an example repository [here](https://github.com/jakobtroidl/webmlp-test) that uses web-mlp.
 
 ## Running
 
