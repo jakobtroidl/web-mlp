@@ -82,8 +82,11 @@ export const Activation = {
 };
 
 export function getActivation(act_string) {
+  console.log(act_string);
   switch (act_string) {
-    case "ReLU":
+    case "Relu":
+      return Activation.ReLU;
+    case "Relu2":
       return Activation.ReLU;
     case "Sigmoid2":
       return Activation.Sigmoid;
