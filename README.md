@@ -31,20 +31,16 @@ testMLP();
 ```
 Depending on your computing hardware, you can increase `batch_size` and `tile_size`. Tested on a MacBook Pro 2021 w/ Intel GPU, which supports up to `batch_size=800000` and `tile_size=32`. Check out [this website](https://webgpureport.org/) to view WebGPU limits for your own device. Also, [here's](https://github.com/jakobtroidl/webmlp-test) an example repository that uses `web-mlp`.
 
-## Running
+## Development
 
 ```sh
+git clone https://github.com/jakobtroidl/web-mlp.git
+cd web-mlp
 npm install
 npm run dev
 ```
 
-## Building
-
-```sh
-npm run build
-```
-
-## Pubish to npm
+## Publish to npm
 
 ```
 npm run build
@@ -54,7 +50,4 @@ npm publish
 ```
 
 ## License
-
-Licensed under either of
- * MIT license ([LICENSE-MIT](LICENSE-MIT) or http://opensource.org/licenses/MIT)
-at your option.
+MIT license ([LICENSE-MIT](LICENSE-MIT)).
