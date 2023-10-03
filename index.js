@@ -3,7 +3,7 @@ import { from_tfjs } from "./src/modelLoader.js";
 import { initWebGPU } from "./src/setup.js";
 import { gemm } from "./src/gemm.js";
 import * as tf from "@tensorflow/tfjs";
-
+import "@tensorflow/tfjs-backend-webgpu";
 import { generate_random_matrix, getActivation } from "./src/utils.js";
 
 function loadComputeParams(model, batch_size) {
@@ -216,7 +216,7 @@ async function testGemm() {
 
 async function testTensorFlowMLP() {
   const path =
-    "https://jakobtroidl.github.io/data/trainedModelOriginal/model.json";
+    "https://jakobtroidl.github.io/data/model_3layers_256neurons/model.json";
 
   const loadedModel = await tf.loadLayersModel(path);
   let start = performance.now();
@@ -229,14 +229,18 @@ async function testTensorFlowMLP() {
 }
 
 async function testMLP() {
-  let batch_size = 10000;
-  let tile_size = 8; // must not be bigger than 16
+  let batch_size = 300000;
+  let tile_size = 32; // must not be bigger than 16
   const path =
-    "https://jakobtroidl.github.io/data/trainedModelOriginal/model.json";
+    "https://jakobtroidl.github.io/data/model_3layers_256neurons/model.json";
+
+  console.log("tf object", tf);
+
+  await tf.setBackend("webgpu");
   let tfjs_model = await from_tfjs(path);
   let model = await createMLP(tfjs_model, batch_size, tile_size);
 
-  console.log(batch_size, model.inputSize, model.outputSize);
+  console.log(batch_size, model.inputSize, model.outputSize, model);
   let X = generate_random_matrix(batch_size, model.inputSize);
 
   let start = performance.now();
