@@ -1,13 +1,12 @@
 import { defineConfig } from "vite";
 import { resolve } from "path";
+import { nodePolyfills } from 'vite-plugin-node-polyfills'
+
 
 export default defineConfig({
-  resolve: {
-    alias: {
-      util: "util",
-      buffer: "buffer",
-    },
-  },
+  plugins: [
+    nodePolyfills(),
+  ],
   build: {
     emptyOutDir: false,
     sourcemap: "inline",
