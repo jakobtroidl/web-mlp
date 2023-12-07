@@ -1,6 +1,6 @@
 {
   "name": "web-mlp",
-  "version": "0.1.4",
+  "version": "0.1.6",
   "description": "",
   "main": "dist/web-mlp.es.js",
   "files": [
@@ -19,11 +19,15 @@
     "@tensorflow/tfjs": "^4.11.0",
     "@tensorflow/tfjs-backend-webgpu": "^4.11.0",
     "@webonnx/wonnx-wasm": "^0.5.0",
+    "buffer": "^6.0.3",
     "util": "^0.12.5",
     "vite": "^2.8.6"
   },
   "devDependencies": {
     "@types/node": "^20.8.0",
     "gh-pages": "^6.0.0"
+  },
+  "browser": {
+    "crypto": false
   }
 }
