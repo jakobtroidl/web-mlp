@@ -229,8 +229,8 @@ async function testTensorFlowMLP() {
 }
 
 async function testMLP() {
-  let batch_size = 300000;
-  let tile_size = 32; // must not be bigger than 16
+  let batch_size = 3000;
+  let tile_size = 8; // must not be bigger than 16
   const path =
     "https://jakobtroidl.github.io/data/model_3layers_256neurons/model.json";
 
@@ -246,7 +246,7 @@ async function testMLP() {
   let start = performance.now();
   let result = await model.inference(X); // result should be 11.881376266479492
   let end = performance.now();
-  console.log("WebMLP Inference time: ", end - start, "ms");
+  console.log("WebMLP Inference time + Data Transfer: ", end - start, "ms");
   console.log("result", result);
 
   const loadedModel = await tf.loadLayersModel(path);
@@ -255,7 +255,7 @@ async function testMLP() {
     tf.tensor2d(X, [batch_size, model.inputSize])
   );
   end = performance.now();
-  console.log("tensorflow js Inference time: ", end - start, "ms");
+  console.log("Tensorflow Inference time + Data Transfer: ", end - start, "ms");
   console.log("Ground Truth: " + result.dataSync());
 }
 

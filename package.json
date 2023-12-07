@@ -1,6 +1,6 @@
 {
   "name": "web-mlp",
-  "version": "0.1.12",
+  "version": "0.1.13",
   "description": "",
   "main": "dist/web-mlp.es.js",
   "files": [
