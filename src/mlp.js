@@ -7,11 +7,6 @@ export class MLP {
     this.outputSize = layers[layers.length - 1].outputSize;
     this.batchSize = layers[layers.length - 1].batchSize;
     this.inputSize = layers[0].inputSize;
-
-    this.stagingBuffer = device.createBuffer({
-      size: this.outputSize * this.batchSize * 4,
-      usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST,
-    });
   }
 
   async inference(data, commandEncoder = undefined) {
@@ -35,16 +30,9 @@ export class MLP {
       commandEncoder = this.device.createCommandEncoder();
     }
 
-    let now = performance.now();
-
     for (let i = 0; i < this.layers.length; i++) {
       this.layers[i].inference(commandEncoder);
     }
-
-    let end = performance.now();
-    console.log("Inference time: ", end - now, "ms");
-
-    return this.layers[this.layers.length - 1].outputBuffer;
   }
 
   async transferToCPU(buffer, commandEncoder = undefined) {
@@ -58,26 +46,33 @@ export class MLP {
       commandEncoder = this.device.createCommandEncoder();
     }
 
+    let outputBytes = this.outputSize * this.batchSize * 4;
+
+    let stagingBuffer = this.device.createBuffer({
+      size: outputBytes,
+      usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST,
+    });
+
     commandEncoder.copyBufferToBuffer(
       buffer,
       0, // Source offset
-      this.stagingBuffer,
+      stagingBuffer,
       0, // Destination offset
-      outputBytes
+      outputBytes // Size
     );
 
     this.device.queue.submit([commandEncoder.finish()]);
 
     // map staging buffer to read results back to JS
-    await this.stagingBuffer.mapAsync(
+    await stagingBuffer.mapAsync(
       GPUMapMode.READ,
       0, // Offset
       outputBytes // Length
     );
 
-    const copyArrayBuffer = this.stagingBuffer.getMappedRange(0, outputBytes);
+    const copyArrayBuffer = stagingBuffer.getMappedRange(0, outputBytes);
     const output = copyArrayBuffer.slice();
-    this.stagingBuffer.unmap();
+    stagingBuffer.unmap();
 
     return new Float32Array(output);
   }

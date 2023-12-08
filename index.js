@@ -6,6 +6,7 @@ import "@tensorflow/tfjs-backend-webgpu";
 import { generate_random_matrix, getActivation } from "./src/utils.js";
 import { setTileSize } from "./src/utils";
 import shaderString from "./src/shaders/tiled_mm.wgsl?raw";
+import { initWebGPU } from "./src/setup.js";
 
 function loadComputeParams(model, batch_size) {
   let n_layers = model.length;
@@ -242,18 +243,33 @@ async function testMLP() {
 
   console.log("tf object", tf);
 
+  let device = await initWebGPU();
+
   await tf.setBackend("webgpu");
+
   let tfjs_model = await from_tfjs(path);
-  let model = await createMLP(tfjs_model, batch_size, tile_size);
+  let [model, outputBuffer] = await createMLP(
+    tfjs_model,
+    device,
+    batch_size,
+    tile_size
+  );
 
   console.log(batch_size, model.inputSize, model.outputSize, model);
   let X = generate_random_matrix(batch_size, model.inputSize);
 
+  console.log("Starting WebMLP Inference...");
+  let commandEncoder = device.createCommandEncoder();
+
   let start = performance.now();
-  let result = await model.inference(X); // result should be 11.881376266479492
+  await model.inference(X, commandEncoder);
+  device.queue.submit([commandEncoder.finish()]);
+
+  // transfer output buffer to CPU
+  let result = await model.transferToCPU(outputBuffer);
   let end = performance.now();
   console.log("WebMLP Inference time + Data Transfer: ", end - start, "ms");
-  console.log("result", result);
+  console.log("WebMLP result", result);
 
   const loadedModel = await tf.loadLayersModel(path);
   start = performance.now();
