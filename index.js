@@ -187,8 +187,6 @@ async function createMLP(tf_model, device, batch_size = 1024, tile_size = 16) {
   let outputBuffer = dataBuffers[dataBuffers.length - 1];
   let mlp = new MLP(device, layers);
 
-  console.log("mlp outputbuffer", outputBuffer);
-
   return [mlp, outputBuffer];
 }
 
