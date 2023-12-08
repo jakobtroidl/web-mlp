@@ -189,7 +189,7 @@ async function createMLP(tf_model, device, batch_size = 1024, tile_size = 16) {
 
   console.log("mlp outputbuffer", outputBuffer);
 
-  return { mlp, outputBuffer };
+  return [mlp, outputBuffer];
 }
 
 async function testGemm() {
