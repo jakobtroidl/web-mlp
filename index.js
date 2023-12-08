@@ -1,10 +1,11 @@
 import { MLP, Linear } from "./src/mlp.js";
 import { from_tfjs } from "./src/modelLoader.js";
-import { initWebGPU } from "./src/setup.js";
 import { gemm } from "./src/gemm.js";
 import * as tf from "@tensorflow/tfjs";
 import "@tensorflow/tfjs-backend-webgpu";
 import { generate_random_matrix, getActivation } from "./src/utils.js";
+import { setTileSize } from "./src/utils";
+import shaderString from "./src/shaders/tiled_mm.wgsl?raw";
 
 function loadComputeParams(model, batch_size) {
   let n_layers = model.length;
@@ -128,8 +129,10 @@ function getComputePipeline(device, shaderModule, layout) {
   });
 }
 
-async function createMLP(tf_model, batch_size = 1024, tile_size = 16) {
-  const { device, shaderModule } = await initWebGPU(tile_size);
+async function createMLP(tf_model, device, batch_size = 1024, tile_size = 16) {
+  const wgslCode = setTileSize(shaderString, tile_size);
+  const shaderModule = device.createShaderModule({ code: wgslCode });
+
   let params = loadComputeParams(tf_model, batch_size);
 
   // create buffers
@@ -183,6 +186,8 @@ async function createMLP(tf_model, batch_size = 1024, tile_size = 16) {
 
   let outputBuffer = dataBuffers[dataBuffers.length - 1];
   let mlp = new MLP(device, layers);
+
+  console.log("mlp outputbuffer", outputBuffer);
 
   return { mlp, outputBuffer };
 }
