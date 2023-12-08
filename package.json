@@ -1,6 +1,6 @@
 {
   "name": "web-mlp",
-  "version": "0.1.13",
+  "version": "0.1.14",
   "description": "",
   "main": "dist/web-mlp.es.js",
   "files": [
@@ -11,7 +11,10 @@
     "dev": "vite dev --host --port 8000",
     "build": "vite build",
     "preview": "vite preview",
-    "deploy": "gh-pages -d dist"
+    "deploy": "gh-pages -d dist",
+    "release-patch": "npm version patch && npm run build && npm pack && npm publish",
+    "release-minor": "npm version minor && npm run build && npm pack && npm publish",
+    "release-major": "npm version major && npm run build && npm pack && npm publish"
   },
   "author": "Jakob Troidl <jtroidl@g.harvard.edu>",
   "license": "ISC",
