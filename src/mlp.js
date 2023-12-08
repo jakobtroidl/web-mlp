@@ -14,7 +14,7 @@ export class MLP {
     });
   }
 
-  async inference(data) {
+  async inference(data, commandEncoder = undefined) {
     /**
      * @param {Float32Array | GPUBuffer} data for forward pass. Can be either a WebGPU buffer or a Float32Array
      * @returns {GPUBuffer} output buffer, which can be mapped to a Float32Array using the transferToCPU method
@@ -31,18 +31,20 @@ export class MLP {
       await this.device.queue.onSubmittedWorkDone();
     }
 
+    if (!commandEncoder) {
+      commandEncoder = this.device.createCommandEncoder();
+    }
+
     let now = performance.now();
 
     for (let i = 0; i < this.layers.length; i++) {
-      await this.layers[i].inference();
+      this.layers[i].inference(commandEncoder);
     }
 
     let end = performance.now();
     console.log("Inference time: ", end - now, "ms");
 
-    let output = this.layers[this.layers.length - 1].outputBuffer;
-
-    return output;
+    return this.layers[this.layers.length - 1].outputBuffer;
   }
 
   async transferToCPU(buffer, commandEncoder = undefined) {
@@ -104,9 +106,14 @@ export class Linear {
     this.outputSize = outputSize;
     this.batchSize = batchSize;
     this.tile_size = tile_size;
+  }
 
-    this.commandEncoder = this.device.createCommandEncoder();
-    let passEncoder = this.commandEncoder.beginComputePass();
+  inference(commandEncoder) {
+    // this.device.queue.submit([this.commandEncoder.finish()]);
+    // await this.device.queue.onSubmittedWorkDone();
+
+    //this.commandEncoder = this.device.createCommandEncoder();
+    let passEncoder = commandEncoder.beginComputePass();
     passEncoder.setPipeline(this.computePipeline);
     passEncoder.setBindGroup(0, this.bindGroup);
     passEncoder.dispatchWorkgroups(
@@ -114,10 +121,5 @@ export class Linear {
       Math.ceil(this.batchSize / this.tile_size)
     );
     passEncoder.end();
-  }
-
-  async inference() {
-    this.device.queue.submit([this.commandEncoder.finish()]);
-    await this.device.queue.onSubmittedWorkDone();
   }
 }
