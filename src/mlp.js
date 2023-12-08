@@ -15,13 +15,21 @@ export class MLP {
   }
 
   async inference(data) {
-    let outputBytes = this.outputSize * this.batchSize * 4;
-    let commandEncoder = this.device.createCommandEncoder();
-
-    // map data to first data buffer
-    let input = this.layers[0].inputBuffer;
-    this.device.queue.writeBuffer(input, 0, data, 0);
-    await this.device.queue.onSubmittedWorkDone();
+    /**
+     * @param {Float32Array | GPUBuffer} data for forward pass. Can be either a WebGPU buffer or a Float32Array
+     * @returns {GPUBuffer} output buffer, which can be mapped to a Float32Array using the transferToCPU method
+     */
+    if (data instanceof Float32Array) {
+      // map data to first data buffer
+      let input = this.layers[0].inputBuffer;
+      this.device.queue.writeBuffer(input, 0, data, 0);
+      await this.device.queue.onSubmittedWorkDone();
+    } else {
+      // data is an instance of GPUBuffer
+      let input = this.layers[0].inputBuffer;
+      this.device.queue.copyBufferToBuffer(data, 0, input, 0, data.byteLength);
+      await this.device.queue.onSubmittedWorkDone();
+    }
 
     let now = performance.now();
 
@@ -32,8 +40,24 @@ export class MLP {
     let end = performance.now();
     console.log("Inference time: ", end - now, "ms");
 
+    let output = this.layers[this.layers.length - 1].outputBuffer;
+
+    return output;
+  }
+
+  async transferToCPU(buffer, commandEncoder = undefined) {
+    /**
+     * Transfers a GPUBuffer to the CPU and returns data as Float32Array
+     * @param {GPUBuffer} buffer to transfer to CPU
+     * @param {GPUCommandEncoder} commandEncoder (optional) to use for the transfer
+     */
+
+    if (!commandEncoder) {
+      commandEncoder = this.device.createCommandEncoder();
+    }
+
     commandEncoder.copyBufferToBuffer(
-      this.layers[this.layers.length - 1].outputBuffer,
+      buffer,
       0, // Source offset
       this.stagingBuffer,
       0, // Destination offset
