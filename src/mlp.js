@@ -9,7 +9,7 @@ export class MLP {
     this.inputSize = layers[0].inputSize;
   }
 
-  async inference(data, commandEncoder = undefined) {
+  inference(data, commandEncoder = undefined) {
     /**
      * @param {Float32Array | GPUBuffer} data for forward pass. Can be either a WebGPU buffer or a Float32Array
      * @returns {GPUBuffer} output buffer, which can be mapped to a Float32Array using the transferToCPU method
@@ -18,12 +18,10 @@ export class MLP {
       // map data to first data buffer
       let input = this.layers[0].inputBuffer;
       this.device.queue.writeBuffer(input, 0, data, 0);
-      await this.device.queue.onSubmittedWorkDone();
     } else {
       // data is an instance of GPUBuffer
       let input = this.layers[0].inputBuffer;
       this.device.queue.copyBufferToBuffer(data, 0, input, 0, data.byteLength);
-      await this.device.queue.onSubmittedWorkDone();
     }
 
     if (!commandEncoder) {

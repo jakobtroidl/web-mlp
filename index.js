@@ -262,7 +262,7 @@ async function testMLP() {
   let commandEncoder = device.createCommandEncoder();
 
   let start = performance.now();
-  await model.inference(X, commandEncoder);
+  model.inference(X, commandEncoder);
   device.queue.submit([commandEncoder.finish()]);
 
   // transfer output buffer to CPU
