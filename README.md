@@ -47,11 +47,11 @@ npm run dev
 
 ## Publish to npm
 
-```javascript
+```
 // ensure all changes are comitted
-npm run release - patch // release new patch version
-npm run release - minor // release new minor version
-npm run release - major // release new major version
+npm run release-patch // release new patch version
+npm run release-minor // release new minor version
+npm run release-major // release new major version
 ```
 
 ## License
