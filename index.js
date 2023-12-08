@@ -181,7 +181,10 @@ async function createMLP(tf_model, batch_size = 1024, tile_size = 16) {
     );
   }
 
-  return new MLP(device, layers);
+  let outputBuffer = dataBuffers[dataBuffers.length - 1];
+  let mlp = new MLP(device, layers);
+
+  return { mlp, outputBuffer };
 }
 
 async function testGemm() {
