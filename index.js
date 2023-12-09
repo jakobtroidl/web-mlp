@@ -36,7 +36,6 @@ function createDataBuffers(device, model, batch_size) {
     if (i == 0) {
       // input layer size
       bufferElements = batch_size * model[i].weight_shape[0];
-      //console.log("bufferElements in first layer: ", bufferElements);
     } else if (i == n_buffers - 1) {
       // output layer size
       bufferElements = batch_size * model[i - 1].weight_shape[1];
