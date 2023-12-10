@@ -2,7 +2,7 @@
 
 # WebGPU accelerated fast MLP inference
 
-Hardware accelerated inference of multi-layer perceptions (MLPs). Works in [browsers supporting WebGPU](https://github.com/gpuweb/gpuweb/wiki/Implementation-Status).
+Hardware accelerated inference of multi-layer perceptions (MLPs) in the broswer. Works in [browsers supporting WebGPU](https://github.com/gpuweb/gpuweb/wiki/Implementation-Status).
 
 ## Install
 
