@@ -21,7 +21,7 @@ export class MLP {
     } else {
       // data is an instance of GPUBuffer
       let input = this.layers[0].inputBuffer;
-      this.device.queue.copyBufferToBuffer(data, 0, input, 0, data.byteLength);
+      commandEncoder.copyBufferToBuffer(data, 0, input, 0, data.byteLength);
     }
 
     if (!commandEncoder) {
