@@ -239,9 +239,9 @@ async function testTensorFlowMLP() {
 }
 
 async function testMLP() {
-  let batch_size = 3000;
+  let batch_size = 20;
   let tile_size = 8; // must not be bigger than 16
-  const path = "https://jakobtroidl.github.io/data/mlp-v8.json";
+  const path = "https://jakobtroidl.github.io/data/mlp-v11.json";
 
   let device = await initWebGPU();
 
