@@ -20,7 +20,7 @@ import {
 } from "web-mlp";
 
 async function testMLP() {
-    let batch_size = 70000;
+    let batch_size = 20;
     let tile_size = 8;
     const path = "https://jakobtroidl.github.io/data/mlp-v8.json"; // path to example model's JSON file
 
@@ -70,17 +70,24 @@ class MLP(nn.Module):
         self.layers = nn.Sequential(*layers)
 
     def forward(self, x):
-        ### YOUR FORWARD PASS HERE
-        pass
+        shape = x.shape[:-1]
+        x = self.layers(x.view(-1, x.shape[-1]))
+        return x.view(*shape, -1)
 
     def export(self, filename):
         # export model
         self.eval()
+
+        dummy_input = torch.ones(1, self.in_dim).cuda()
+        dummy_out = self(dummy_input)
+
         activation = "Relu"
         weights_and_biases = {}
         weights_and_biases['input_shape'] = [None, self.in_dim]
         weights_and_biases['output_shape'] = [None, self.out_dim]
         weights_and_biases['activations'] = activation
+        weights_and_biases['dummy_input'] = dummy_input.cpu().detach().numpy().tolist()
+        weights_and_biases['dummy_output'] = dummy_out.cpu().detach().numpy().tolist()
 
         layers = {}
         for name, param in self.named_parameters():
@@ -89,7 +96,7 @@ class MLP(nn.Module):
             if key not in layers:
                 layers[key] = {}
             param_np = param.cpu().detach().numpy()
-            layers[key][name_parts[2]] = param_np.flatten().tolist()
+            layers[key][name_parts[2]] = param_np.flatten(order="F").tolist()
             layers[key][name_parts[2] + '_shape'] = list(param_np.shape)
 
         sorted_keys = sorted(layers.keys())
@@ -111,6 +118,8 @@ WebMLP takes a JSON file as input. The file format is described below. [Here's](
         null, 1
     ],
     "activations": "Relu", // applied to all layers except the last layer. Options are [Relu, Sigmoid, Tanh, Linear]
+    "dummy_input": [[ /* Example Input */ ]],
+    "dummy_output": [[ /* Expected Output for dummy input. Can be used to verify if inference works */ ]]
     "layers": [
         {
             "weight": [ /* Linear Layer 1 weights as Float32Array. Ordered row-major. */ ],
