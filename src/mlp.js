@@ -14,6 +14,11 @@ export class MLP {
      * @param {Float32Array | GPUBuffer} data for forward pass. Can be either a WebGPU buffer or a Float32Array
      * @returns {GPUBuffer} output buffer, which can be mapped to a Float32Array using the transferToCPU method
      */
+
+    if (!commandEncoder) {
+      commandEncoder = this.device.createCommandEncoder();
+    }
+
     if (data instanceof Float32Array) {
       // map data to first data buffer
       let input = this.layers[0].inputBuffer;
@@ -22,10 +27,6 @@ export class MLP {
       // data is an instance of GPUBuffer
       let input = this.layers[0].inputBuffer;
       commandEncoder.copyBufferToBuffer(data, 0, input, 0, data.byteLength);
-    }
-
-    if (!commandEncoder) {
-      commandEncoder = this.device.createCommandEncoder();
     }
 
     for (let i = 0; i < this.layers.length; i++) {
