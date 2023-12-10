@@ -22,7 +22,7 @@ import {
 async function testMLP() {
     let batch_size = 20;
     let tile_size = 8;
-    const path = "https://jakobtroidl.github.io/data/mlp-v8.json"; // path to example model's JSON file
+    const path = "https://jakobtroidl.github.io/data/mlp-v11.json"; // path to example model's JSON file
 
     let device = await initWebGPU();
     let model_data = await from_json(path); // load model
@@ -38,18 +38,21 @@ async function testMLP() {
     let end = performance.now();
 
     console.log("WebMLP Inference time + Data Transfer: ", end - start, "ms");
-    console.log("result", result);
+    console.log("WebMLP result", result);
+    console.log("WebMLP result should match dummy_output in model.json");
 }
 
 testMLP();
 ```
 
-Depending on your computing hardware, you can increase `batch_size` and `tile_size` . Tested on a MacBook Pro 2021 w/ Intel GPU, which supports up to `batch_size=800000` and `tile_size=32`. Check out [this website](https://webgpureport.org/) to view WebGPU limits for your own device. Also, [here's](https://github.com/jakobtroidl/webmlp-test) an example repository that uses `web-mlp`.
+Depending on your computing hardware, you can increase `batch_size` and `tile_size` . Tested on a MacBook Pro 2021 w/ Intel GPU, which supports up to `batch_size=800000` and `tile_size=32` . Check out [this website](https://webgpureport.org/) to view WebGPU limits for your own device.
 
 ## PyTorch to WebMLP
+
 WebMLP is purely designed for model inference. That means you can't use it to train an MLP. We recommend training the MLP in PyTorch and exporting the model to JSON for WebMLP inference. Here, we describe how that process works. 
 
 ### PyTorch export 
+
 ```python
 import torch.nn as nn
 import torch
@@ -108,8 +111,10 @@ class MLP(nn.Module):
 ```
 
 ### WebMLP Input Format
-WebMLP takes a JSON file as input. The file format is described below. [Here's](https://jakobtroidl.github.io/data/mlp-v8.json) an example of a small 3-hidden 64-neuron layer MLP in that file format. 
-``` json5
+
+WebMLP takes a JSON file as input. The file format is described below. [Here's](https://jakobtroidl.github.io/data/mlp-v11.json) an example of a small 3-hidden 64-neuron layer MLP in that file format. 
+
+```json5
 {
     "input_shape": [
         null, 19
@@ -132,6 +137,7 @@ WebMLP takes a JSON file as input. The file format is described below. [Here's](
     ]
 }
 ```
+
 ## Development
 
 ```sh
