@@ -11,16 +11,23 @@ export async function from_json(path) {
 
   let out_layers = [];
   try {
+    let i = 0;
     mlp_data.layers.forEach((layer) => {
+      let act = mlp_data.activations;
+      if (i == mlp_data.layers.length - 1) {
+        // last layer has no activations
+        act = "Linear";
+      }
       const layerObject = {
         weights: new Float32Array(layer.weight),
         weight_shape: layer.weight_shape,
         biases: new Float32Array(layer.bias),
         bias_shape: layer.bias_shape,
-        activation: mlp_data.activations,
+        activation: act,
       };
 
       out_layers.push(layerObject);
+      i++;
     });
     return out_layers;
   } catch (e) {

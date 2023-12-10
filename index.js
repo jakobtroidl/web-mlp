@@ -1,5 +1,5 @@
 import { MLP, Linear } from "./src/mlp.js";
-import { from_tfjs } from "./src/modelLoader.js";
+import { from_tfjs, from_json } from "./src/modelLoader.js";
 import { gemm } from "./src/gemm.js";
 import * as tf from "@tensorflow/tfjs";
 import "@tensorflow/tfjs-backend-webgpu";
@@ -176,8 +176,8 @@ async function createMLP(tf_model, device, batch_size = 1024, tile_size = 16) {
         dataBuffers[i],
         dataBuffers[i + 1],
         computePipeline,
-        tf_model[i].weight_shape[0],
         tf_model[i].weight_shape[1],
+        tf_model[i].weight_shape[0],
         batch_size,
         tile_size
       )
@@ -237,22 +237,18 @@ async function testTensorFlowMLP() {
 async function testMLP() {
   let batch_size = 3000;
   let tile_size = 8; // must not be bigger than 16
-  const path =
-    "https://jakobtroidl.github.io/data/model_3layers_256neurons/model.json";
-
-  console.log("tf object", tf);
+  const path = "https://jakobtroidl.github.io/data/mlp-v8.json";
 
   let device = await initWebGPU();
 
-  await tf.setBackend("webgpu");
-
-  let tfjs_model = await from_tfjs(path);
+  let model_data = await from_json(path);
   let [model, outputBuffer] = await createMLP(
-    tfjs_model,
+    model_data,
     device,
     batch_size,
     tile_size
   );
+  console.log("model", model);
 
   console.log(batch_size, model.inputSize, model.outputSize, model);
   let X = generate_random_matrix(batch_size, model.inputSize);
@@ -270,18 +266,18 @@ async function testMLP() {
   console.log("WebMLP Inference time + Data Transfer: ", end - start, "ms");
   console.log("WebMLP result", result);
 
-  const loadedModel = await tf.loadLayersModel(path);
-  start = performance.now();
-  result = await loadedModel.predict(
-    tf.tensor2d(X, [batch_size, model.inputSize])
-  );
-  end = performance.now();
-  console.log("Tensorflow Inference time + Data Transfer: ", end - start, "ms");
-  console.log("Ground Truth: " + result.dataSync());
+  // const loadedModel = await tf.loadLayersModel(path);
+  // start = performance.now();
+  // result = await loadedModel.predict(
+  //   tf.tensor2d(X, [batch_size, model.inputSize])
+  // );
+  // end = performance.now();
+  // console.log("Tensorflow Inference time + Data Transfer: ", end - start, "ms");
+  // console.log("Ground Truth: " + result.dataSync());
 }
 
 // testGemm();
 // testTensorFlowMLP();
-// testMLP();
+testMLP();
 
 export { createMLP, from_tfjs };
