@@ -44,8 +44,34 @@ async function testMLP() {
 testMLP();
 ```
 
-Depending on your computing hardware, you can increase `batch_size` and `tile_size` . Tested on a MacBook Pro 2021 w/ Intel GPU, which supports up to `batch_size=800000` and `tile_size=32` . Check out [this website](https://webgpureport.org/) to view WebGPU limits for your own device. Also, [here's](https://github.com/jakobtroidl/webmlp-test) an example repository that uses `web-mlp` .
+Depending on your computing hardware, you can increase `batch_size` and `tile_size` . Tested on a MacBook Pro 2021 w/ Intel GPU, which supports up to `batch_size=800000` and `tile_size=32`. Check out [this website](https://webgpureport.org/) to view WebGPU limits for your own device. Also, [here's](https://github.com/jakobtroidl/webmlp-test) an example repository that uses `web-mlp`.
 
+## PyTorch to WebMLP
+WebMLP is purely designed for model inference. That means you can't train an MLP using this repository. We recommend training the MLP in PyTorch and exporting the model to work with WebMLP. Here, we describe how that process works. 
+
+### WebMLP Input Format
+WebMLP takes a JSON file as input. The file format is described below. [Here's](https://jakobtroidl.github.io/data/mlp-v8.json) an example of a small 3-hidden 64-neuron layer MLP in that file format. 
+``` json5
+{
+    "input_shape": [
+        null, 19
+    ],
+    "output_shape": [
+        null, 1
+    ],
+    "activations": "Relu", // applied to all layers except the last layer. Options are [Relu, Sigmoid, Tanh, Linear]
+    "layers": [
+        {
+            "weight": [ /* Linear Layer 1 weights as Float32Array. Ordered row-major. */ ],
+            "weight_shape": [ 64, 19], /* output dimension, input dimension */
+            "bias": [ /* Linear Layer 1 biases as Float32Array. Ordered row-major. */ ],
+            "bias_shape": [ 64 ]
+        }, 
+        { ... }, // Layer 2
+        { ... }  // Layer N
+    ]
+}
+```
 ## Development
 
 ```sh
