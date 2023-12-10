@@ -25,8 +25,8 @@ async function testMLP() {
     const path = "https://jakobtroidl.github.io/data/mlp-v8.json"; // path to example model's JSON file
 
     let device = await initWebGPU();
-    let model_data = await from_json(path); // load tensorflow.js model
-    let [model, outputBuffer] = await createMLP(model_data, batch_size, tile_size); // convert to web-mlp model for fast inference
+    let model_data = await from_json(path); // load model
+    let [model, outputBuffer] = await createMLP(model_data, batch_size, tile_size); // convert to WebMLP model for fast inference
     let X = Float32Array.from(Array(batch_size * model.inputSize).fill(0), () => Math.random()); // generate random a input
 
     let commandEncoder = device.createCommandEncoder();
