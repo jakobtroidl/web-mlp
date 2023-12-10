@@ -2,7 +2,7 @@
 
 # WebGPU accelerated fast MLP inference
 
-Hardware accelerated inference of [tensorflow.js](https://www.tensorflow.org/js) multi-layer perceptrons. Works in [browsers supporting WebGPU](https://github.com/gpuweb/gpuweb/wiki/Implementation-Status).
+Hardware accelerated inference of multi-layer perceptions (MLPs). Works in [browsers supporting WebGPU](https://github.com/gpuweb/gpuweb/wiki/Implementation-Status).
 
 ## Install
 
@@ -14,21 +14,31 @@ npm i web-mlp
 
 ```javascript
 import {
+    initWebGPU,
     createMLP,
-    from_tfjs
+    from_json
 } from "web-mlp";
 
 async function testMLP() {
     let batch_size = 70000;
     let tile_size = 8;
+    const path = "https://jakobtroidl.github.io/data/mlp-v8.json"; // path to example model's JSON file
 
-    const path = "https://jakobtroidl.github.io/data/trainedModelOriginal/model.json"; // path to tensorflow.js model
-    let tfjs_model = await from_tfjs(path); // load tensorflow.js model
-    let model = await createMLP(tfjs_model, batch_size, tile_size); // convert to web-mlp model for fast inference
+    let device = await initWebGPU();
+    let model_data = await from_json(path); // load tensorflow.js model
+    let [model, outputBuffer] = await createMLP(model_data, batch_size, tile_size); // convert to web-mlp model for fast inference
     let X = Float32Array.from(Array(batch_size * model.inputSize).fill(0), () => Math.random()); // generate random a input
 
-    let result = await model.inference(X); // inference the model
-    console.log("result", result); // print result
+    let commandEncoder = device.createCommandEncoder();
+
+    let start = performance.now();
+    model.inference(X, commandEncoder); // inference the model
+    device.queue.submit([commandEncoder.finish()]);
+    let result = await model.transferToCPU(outputBuffer);
+    let end = performance.now();
+
+    console.log("WebMLP Inference time + Data Transfer: ", end - start, "ms");
+    console.log("result", result);
 }
 
 testMLP();
