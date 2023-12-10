@@ -13,9 +13,9 @@ export async function from_json(path) {
   try {
     mlp_data.layers.forEach((layer) => {
       const layerObject = {
-        weights: layer.weight,
+        weights: new Float32Array(layer.weight),
         weight_shape: layer.weight_shape,
-        biases: layer.bias,
+        biases: new Float32Array(layer.bias),
         bias_shape: layer.bias_shape,
         activation: mlp_data.activations,
       };
