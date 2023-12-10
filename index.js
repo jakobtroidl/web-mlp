@@ -3,7 +3,11 @@ import { from_tfjs, from_json } from "./src/modelLoader.js";
 import { gemm } from "./src/gemm.js";
 import * as tf from "@tensorflow/tfjs";
 import "@tensorflow/tfjs-backend-webgpu";
-import { generate_random_matrix, getActivation } from "./src/utils.js";
+import {
+  generate_random_matrix,
+  generate_ones_matrix,
+  getActivation,
+} from "./src/utils.js";
 import { setTileSize } from "./src/utils";
 import shaderString from "./src/shaders/tiled_mm.wgsl?raw";
 import { initWebGPU } from "./src/setup.js";
@@ -251,7 +255,7 @@ async function testMLP() {
   console.log("model", model);
 
   console.log(batch_size, model.inputSize, model.outputSize, model);
-  let X = generate_random_matrix(batch_size, model.inputSize);
+  let X = generate_ones_matrix(batch_size, model.inputSize);
 
   console.log("Starting WebMLP Inference...");
   let commandEncoder = device.createCommandEncoder();
@@ -280,4 +284,4 @@ async function testMLP() {
 // testTensorFlowMLP();
 testMLP();
 
-export { createMLP, from_tfjs };
+export { createMLP, from_json, initWebGPU };

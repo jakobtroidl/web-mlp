@@ -10,6 +10,10 @@ export function generate_random_matrix(w, h) {
   return Float32Array.from(Array(w * h).fill(0), () => Math.random());
 }
 
+export function generate_ones_matrix(w, h) {
+  return Float32Array.from(Array(w * h).fill(1));
+}
+
 export function mlp_test_data(batch_size) {
   return new Float32Array([
     0,
