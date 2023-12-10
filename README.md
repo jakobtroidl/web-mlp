@@ -47,7 +47,60 @@ testMLP();
 Depending on your computing hardware, you can increase `batch_size` and `tile_size` . Tested on a MacBook Pro 2021 w/ Intel GPU, which supports up to `batch_size=800000` and `tile_size=32`. Check out [this website](https://webgpureport.org/) to view WebGPU limits for your own device. Also, [here's](https://github.com/jakobtroidl/webmlp-test) an example repository that uses `web-mlp`.
 
 ## PyTorch to WebMLP
-WebMLP is purely designed for model inference. That means you can't train an MLP using this repository. We recommend training the MLP in PyTorch and exporting the model to work with WebMLP. Here, we describe how that process works. 
+WebMLP is purely designed for model inference. That means you can't use it to train an MLP. We recommend training the MLP in PyTorch and exporting the model to work with WebMLP. Here, we describe how that process works. 
+
+### PyTorch export 
+```python
+import torch.nn as nn
+import torch
+import json
+
+class MLP(nn.Module):
+
+    def __init__(self, in_dim, out_dim, n_hidden, n_neurons):
+        super().__init__()
+        layers = []
+        self.in_dim = in_dim
+        self.out_dim = out_dim
+        lastv = in_dim
+        for i in range(n_hidden):
+            layers.append(nn.Linear(lastv, n_neurons))
+            layers.append(nn.ReLU())
+            lastv = n_neurons
+        layers.append(nn.Linear(lastv, out_dim))
+        self.layers = nn.Sequential(*layers)
+
+    def forward(self, x):
+        shape = x.shape[:-1]
+        x = self.layers(x.view(-1, x.shape[-1]))
+        return x.view(*shape, -1)
+
+    def export(self, filename):
+        # export model
+        self.eval()
+        activation = "Relu"
+        weights_and_biases = {}
+        weights_and_biases['input_shape'] = [None, self.in_dim]
+        weights_and_biases['output_shape'] = [None, self.out_dim]
+        weights_and_biases['activations'] = activation
+
+        layers = {}
+        for name, param in self.named_parameters():
+            name_parts = name.split('.')
+            key = name_parts[0] + "." + name_parts[1]
+            if key not in layers:
+                layers[key] = {}
+            param_np = param.cpu().detach().numpy()
+            layers[key][name_parts[2]] = param_np.flatten().tolist()
+            layers[key][name_parts[2] + '_shape'] = list(param_np.shape)
+
+        sorted_keys = sorted(layers.keys())
+        weights_and_biases['layers'] = [layers[key] for key in sorted_keys]
+
+        # safe weights and biases as json
+        with open(filename, 'w') as outfile:
+            json.dump(weights_and_biases, outfile)
+```
 
 ### WebMLP Input Format
 WebMLP takes a JSON file as input. The file format is described below. [Here's](https://jakobtroidl.github.io/data/mlp-v8.json) an example of a small 3-hidden 64-neuron layer MLP in that file format. 
