@@ -1,8 +1,5 @@
 import { MLP, Linear } from "./src/mlp.js";
-import { from_tfjs, from_json } from "./src/modelLoader.js";
-import { gemm } from "./src/gemm.js";
-import * as tf from "@tensorflow/tfjs";
-import "@tensorflow/tfjs-backend-webgpu";
+import { from_json } from "./src/modelLoader.js";
 import {
   generate_random_matrix,
   generate_ones_matrix,
@@ -194,50 +191,6 @@ async function createMLP(tf_model, device, batch_size = 1024, tile_size = 16) {
   return [mlp, outputBuffer];
 }
 
-async function testGemm() {
-  let batch_size = 70000;
-  let in_features = 100;
-  let out_features = 2;
-  let tile_size = 16;
-
-  let A = generate_random_matrix(batch_size, in_features);
-  let B = generate_random_matrix(in_features, out_features);
-
-  // let A = new Float32Array([
-  //   1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16,
-  // ]);
-  // let B = new Float32Array([
-  //   1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16,
-  // ]);
-  // let Y = new Float32Array([
-  //   90, 100, 110, 116, 202, 228, 254, 272, 314, 356, 398, 428, 413, 470, 527,
-  //   569,
-  // ]);
-
-  let result = await gemm(
-    A,
-    B,
-    batch_size,
-    in_features,
-    out_features,
-    tile_size
-  );
-}
-
-async function testTensorFlowMLP() {
-  const path =
-    "https://jakobtroidl.github.io/data/model_3layers_256neurons/model.json";
-
-  const loadedModel = await tf.loadLayersModel(path);
-  let start = performance.now();
-  const result = await loadedModel.predict(
-    tf.tensor2d([[0, 0.625, 0.495, 0.165, 1.262, 0.507, 0.318, 0.39]])
-  );
-  let end = performance.now();
-  console.log("tensorflow js Inference time: ", end - start, "ms");
-  console.log("Ground Truth: " + result.dataSync());
-}
-
 async function testMLP() {
   let batch_size = 20;
   let tile_size = 8; // must not be bigger than 16
@@ -269,19 +222,9 @@ async function testMLP() {
   let end = performance.now();
   console.log("WebMLP Inference time + Data Transfer: ", end - start, "ms");
   console.log("WebMLP result", result);
-
-  // const loadedModel = await tf.loadLayersModel(path);
-  // start = performance.now();
-  // result = await loadedModel.predict(
-  //   tf.tensor2d(X, [batch_size, model.inputSize])
-  // );
-  // end = performance.now();
-  // console.log("Tensorflow Inference time + Data Transfer: ", end - start, "ms");
-  // console.log("Ground Truth: " + result.dataSync());
+  console.log("WebMLP result should match dummy_output in model.json");
 }
 
-// testGemm();
-// testTensorFlowMLP();
-testMLP();
+// testMLP();
 
 export { createMLP, from_json, initWebGPU };
