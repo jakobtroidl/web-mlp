@@ -19,8 +19,8 @@ function loadComputeParams(model, batch_size) {
   for (let i = 0; i < n_layers; i++) {
     let layerParam = [
       batch_size, // batch_size,
-      model[i].weight_shape[0], // in_features,
-      model[i].weight_shape[1], // out_features,
+      model[i].weight_shape[1], // in_features,
+      model[i].weight_shape[0], // out_features,
       getActivation(model[i].activation), // activation
     ];
 
@@ -39,13 +39,13 @@ function createDataBuffers(device, model, batch_size) {
     let bufferElements = 0.0;
     if (i == 0) {
       // input layer size
-      bufferElements = batch_size * model[i].weight_shape[0];
+      bufferElements = batch_size * model[i].weight_shape[1];
     } else if (i == n_buffers - 1) {
       // output layer size
-      bufferElements = batch_size * model[i - 1].weight_shape[1];
+      bufferElements = batch_size * model[i - 1].weight_shape[0];
     } else {
       // hidden layer size
-      bufferElements = batch_size * model[i].weight_shape[0];
+      bufferElements = batch_size * model[i].weight_shape[1];
     }
     // initialize all data buffers with zeros
     let bufferSize = bufferElements * 4;
