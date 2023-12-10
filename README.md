@@ -2,7 +2,7 @@
 
 # WebGPU accelerated fast MLP inference
 
-Hardware accelerated inference of multi-layer perceptions (MLPs) in the broswer. Works in [browsers supporting WebGPU](https://github.com/gpuweb/gpuweb/wiki/Implementation-Status).
+Hardware accelerated inference of multi-layer perceptions (MLPs) in the browser. Works in [browsers supporting WebGPU](https://github.com/gpuweb/gpuweb/wiki/Implementation-Status).
 
 ## Install
 
@@ -47,7 +47,7 @@ testMLP();
 Depending on your computing hardware, you can increase `batch_size` and `tile_size` . Tested on a MacBook Pro 2021 w/ Intel GPU, which supports up to `batch_size=800000` and `tile_size=32`. Check out [this website](https://webgpureport.org/) to view WebGPU limits for your own device. Also, [here's](https://github.com/jakobtroidl/webmlp-test) an example repository that uses `web-mlp`.
 
 ## PyTorch to WebMLP
-WebMLP is purely designed for model inference. That means you can't use it to train an MLP. We recommend training the MLP in PyTorch and exporting the model to work with WebMLP. Here, we describe how that process works. 
+WebMLP is purely designed for model inference. That means you can't use it to train an MLP. We recommend training the MLP in PyTorch and exporting the model to JSON for WebMLP inference. Here, we describe how that process works. 
 
 ### PyTorch export 
 ```python
