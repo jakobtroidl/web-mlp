@@ -56,7 +56,6 @@ import torch
 import json
 
 class MLP(nn.Module):
-
     def __init__(self, in_dim, out_dim, n_hidden, n_neurons):
         super().__init__()
         layers = []
@@ -71,9 +70,8 @@ class MLP(nn.Module):
         self.layers = nn.Sequential(*layers)
 
     def forward(self, x):
-        shape = x.shape[:-1]
-        x = self.layers(x.view(-1, x.shape[-1]))
-        return x.view(*shape, -1)
+        ### YOUR FORWARD PASS HERE
+        pass
 
     def export(self, filename):
         # export model
