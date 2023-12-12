@@ -1,6 +1,6 @@
 [![npm version](https://img.shields.io/npm/v/web-mlp.svg?color=1a8cff)](https://www.npmjs.com/package/web-mlp)
 
-# WebGPU accelerated fast MLP inference
+# WebGPU accelerated MLP inference
 
 Hardware accelerated inference of multi-layer perceptions (MLPs) in the browser. Works in [browsers supporting WebGPU](https://github.com/gpuweb/gpuweb/wiki/Implementation-Status).
 
