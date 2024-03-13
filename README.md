@@ -51,6 +51,8 @@ Depending on your computing hardware, you can increase `batch_size` and `tile_si
 
 WebMLP is purely designed for model inference. That means you can't use it to train an MLP. We recommend training the MLP in PyTorch and exporting the model to JSON for WebMLP inference. Here, we describe how that process works. 
 
+> Note: This approach for loading pretrained weights is currently more of a hack than a thought-through solution. Any ideas on how to make that more robust are welcome. Please open an issue with ideas. 
+
 ### PyTorch export 
 
 ```python
